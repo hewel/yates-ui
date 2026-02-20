@@ -1,0 +1,25 @@
+{
+  "dependencies": {},
+  "prettier": {
+    "semi": false,
+    "tabWidth": 2
+  },
+  "name": "yates-ui",
+  "private": true,
+  "scripts": {
+    "start": "rolldown -w -c",
+    "build": "rolldown -c"
+  },
+  "devDependencies": {
+    "@swc/core": "^1.15.11",
+    "@types/bun": "latest",
+    "@vanilla-extract/rollup-plugin": "^1.5.1",
+    "lightningcss": "^1.31.1",
+    "rolldown": "^1.0.0-rc.5",
+    "rollup-plugin-import-css": "^4.2.0",
+    "unplugin-swc": "^1.5.9"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}

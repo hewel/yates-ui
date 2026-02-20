@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "exclude": [
+    "dist",
+    "node_modules"
+  ],
+  "compilerOptions": {
+    "strict": true,
+    "module": "ES2022",
+    "target": "ES2020",
+    "lib": [
+      "ES2023"
+    ],
+    "moduleResolution": "Bundler",
+    // "checkJs": true,
+    // "allowJs": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "ags/gtk4",
+    "baseUrl": "./",
+    "paths": {
+      "ags": [
+        "./node_modules/ags"
+      ],
+      "gnim": [
+        "./node_modules/gnim"
+      ]
+    }
+  }
+}
