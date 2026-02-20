@@ -8,7 +8,6 @@ export const bar = style({
 });
 
 export const content = style({
-    width: "100%",
 });
 
 export const leading = style({
@@ -50,7 +49,7 @@ export const windowTitle = style({
 
 export const dateLabel = style({
     fontWeight: "600",
-    fontSize: "0.78rem",
+    fontSize: "1rem",
     color: "#d9deea",
 });
 

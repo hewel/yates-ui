@@ -2,6 +2,7 @@ import app from "ags/gtk4/app"
 import { Astal, Gtk, Gdk } from "ags/gtk4"
 import Pango from "gi://Pango"
 import { createPoll } from "ags/time"
+import { format } from "date-fns"
 import WorkspaceDots from "./bar/WorkspaceDots"
 import { barState, getWorkspaceDots } from "./bar/state"
 
@@ -15,11 +16,7 @@ import {
 } from "./Bar.css"
 
 const dateValue = createPoll("", 1000, () => {
-  return new Date().toLocaleDateString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  })
+  return format(new Date(), "EEE hh:mm")
 })
 
 export default function Bar(gdkmonitor: Gdk.Monitor) {
