@@ -11,6 +11,10 @@ export const content = style({
     width: "100%",
 });
 
+export const leading = style({
+    minWidth: "180px",
+});
+
 export const workspaceRail = style({
     minWidth: "12px",
 });
@@ -39,6 +43,15 @@ export const windowTitle = style({
     fontWeight: "500",
     fontSize: "0.82rem",
     color: "#e6e9ef",
+    backgroundColor: "rgba(255, 255, 255, 0.12)",
+    borderRadius: "6px",
+    padding: "2px 8px",
+});
+
+export const dateLabel = style({
+    fontWeight: "600",
+    fontSize: "0.78rem",
+    color: "#d9deea",
 });
 
 export const metaLabel = style({
