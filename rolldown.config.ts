@@ -1,6 +1,7 @@
 import { defineConfig } from 'rolldown';
-import swc from 'unplugin-swc';
 import { vanillaExtractPlugin } from '@vanilla-extract/rollup-plugin';
+import esbuild from 'rollup-plugin-esbuild';
+
 import { vanillaCssUrl } from './plugins/vanillaCssUrl';
 import { runAgs } from './plugins/runAgs';
 
@@ -13,13 +14,29 @@ export default defineConfig({
     output: {
         dir: "./dist",
         cleanDir: true,
-        // preserveModules: true,
+        format: 'esm',
+
     },
-    external: (id) => {
-        return id.startsWith("ags");
-    },
+    external: [
+        /^gi:\/\//,
+        /^resource:\/\//,
+        /^ags\//,
+        /^gnim\//,
+        'system',
+        'gettext'
+    ],
     plugins: [
-        swc.rolldown(),
+        esbuild({
+            target: 'es2022',
+
+            // Transform JSX for AGS
+            jsx: 'automatic',
+            jsxImportSource: 'ags/gtk4',
+
+            // Crucial for GObject.Object registration: prevents class names from being mangled
+            keepNames: true,
+
+        }),
         vanillaExtractPlugin({
             extract: {
                 name: 'style.css'

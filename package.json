@@ -1,7 +1,4 @@
 {
-  "dependencies": {
-    "effect": "4.0.0-beta.6"
-  },
   "prettier": {
     "semi": false,
     "tabWidth": 2
@@ -12,16 +9,18 @@
     "start": "rolldown -w -c",
     "build": "rolldown -c"
   },
+  "dependencies": {
+    "effect": "4.0.0-beta.6"
+  },
   "devDependencies": {
-    "@swc/core": "^1.15.11",
     "@types/bun": "latest",
     "@vanilla-extract/rollup-plugin": "^1.5.1",
+    "esbuild": "^0.27.3",
     "lightningcss": "^1.31.1",
     "rolldown": "^1.0.0-rc.5",
-    "rollup-plugin-import-css": "^4.2.0",
-    "unplugin-swc": "^1.5.9"
+    "rollup-plugin-esbuild": "^6.2.1"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": "^5.9.3"
   }
 }
