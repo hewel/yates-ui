@@ -11,7 +11,7 @@ export function runAgs(): Plugin {
             if (!chunk) return;
 
             try {
-                execSync('ags quit');
+                execSync('ags quit', { stdio: 'ignore' });
             } catch (err) { }
 
             spawn('ags', ['run', path.join(options.dir ?? '', chunk.fileName)], {

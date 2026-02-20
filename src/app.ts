@@ -1,5 +1,6 @@
 import app from "ags/gtk4/app"
 import Bar from "./widget/Bar"
+
 import style from "virtual:vanilla-bundle-url"
 
 app.start({
