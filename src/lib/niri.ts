@@ -1,178 +1,141 @@
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 
-import GObject, { register, signal, getter } from "gnim/gobject"
+import GObject, { register, signal, getter, property } from "gnim/gobject"
 
-import { Effect, Console } from "effect"
+import { Effect, pipe } from "effect"
+import { match, P } from "ts-pattern"
 
-export namespace NiriClient {
-  export interface SignalSignatures extends GObject.Object.SignalSignatures {
-    event: (eventName: string, payloadStr: string) => void
-    "workspaces-changed": (payloadStr: string) => void
-    "workspace-activated": (payloadStr: string) => void
-    "windows-changed": (payloadStr: string) => void
-    "window-opened-or-changed": (payloadStr: string) => void
-    "window-closed": (payloadStr: string) => void
-    "window-focus-changed": (payloadStr: string) => void
-    "keyboard-layouts-changed": (payloadStr: string) => void
-    "keyboard-layout-switched": (payloadStr: string) => void
-  }
-}
+import * as Niri from "./niri-types"
 
 @register()
-export class NiriClient extends GObject.Object {
-  declare $signals: NiriClient.SignalSignatures
-
-  @getter(String)
-  get socketPath() {
-    return GLib.getenv("NIRI_SOCKET") ?? ""
+export class NiriService extends GObject.Object {
+  private static _instance: NiriService | null = null
+  static get_default(): NiriService {
+    if (!this._instance) {
+      this._instance = new NiriService()
+    }
+    return this._instance
   }
 
-  // Define signals using the @signal decorator.
-  // The decorator automatically maps camelCase method names to kebab-case signals.
-  // Calling these methods will automatically emit the signal.
-
-  @signal(String, String)
-  event(eventName: string, payloadStr: string) {}
-
-  @signal(String)
-  workspacesChanged(payloadStr: string) {}
-
-  @signal(String)
-  workspaceActivated(payloadStr: string) {}
-
-  @signal(String)
-  windowsChanged(payloadStr: string) {}
-
-  @signal(String)
-  windowOpenedOrChanged(payloadStr: string) {}
-
-  @signal(String)
-  windowClosed(payloadStr: string) {}
-
-  @signal(String)
-  windowFocusChanged(payloadStr: string) {}
-
-  @signal(String)
-  keyboardLayoutsChanged(payloadStr: string) {}
-
-  @signal(String)
-  keyboardLayoutSwitched(payloadStr: string) {}
+  // Reactive properties for gnim
+  @property(Object) focusedWindow: Niri.Window = {} as Niri.Window
+  @property(Object) windows: Niri.Window[] = []
 
   constructor() {
     super()
-
-    if (!this.socketPath) {
-      console.error("Error: NIRI_SOCKET environment variable is not set.")
-      return
-    }
-
-    // Initialize the asynchronous connection to Niri
-    this._connectEventStream()
+    this.init()
   }
 
-  private _connectEventStream() {
-    let client = new Gio.SocketClient()
-    let address = new Gio.UnixSocketAddress({ path: this.socketPath })
+  private getSocketAddress(): Gio.UnixSocketAddress {
+    const socketPath = GLib.getenv("NIRI_SOCKET")
+    if (!socketPath) throw new Error("NIRI_SOCKET environment variable is not set")
+    return Gio.UnixSocketAddress.new(socketPath)
+  }
 
-    // Connect asynchronously to keep the main loop non-blocking
-    client.connect_async(address, null, (_, res) => {
-      try {
-        let connection = client.connect_finish(res)
-        let outStream = connection.get_output_stream()
-        let inStream = new Gio.DataInputStream({
-          base_stream: connection.get_input_stream(),
+  // Send a synchronous/one-off command
+  public message(request: Niri.Request) {
+    const reqString = pipe(
+      match(request)
+        .with(
+          {
+            type: P.union("Action", "Output"),
+          },
+          ({ type, ...data }) => ({
+            [type]: data,
+          }),
+        )
+        .otherwise(({ type }) => type),
+      (obj) => JSON.stringify(obj) + "\n",
+    )
+
+    return Effect.callback<Niri.Response, Error>((resume) => {
+      const client = new Gio.SocketClient()
+      const address = this.getSocketAddress()
+      client.connect_async(address, null, (client, result) => {
+        const connection = client?.connect_finish(result)
+        if (!connection) return
+        const output = new Gio.DataOutputStream({ base_stream: connection.get_output_stream() })
+        const input = new Gio.DataInputStream({ base_stream: connection.get_input_stream() })
+        output.put_string(reqString, null)
+
+        input.read_line_async(GLib.PRIORITY_DEFAULT, null, (inStream, readRes) => {
+          if (!inStream) {
+            return resume(Effect.fail(new Error("Failed to read response from Niri")))
+          }
+          const [line] = inStream.read_line_finish_utf8(readRes)
+          if (!line) {
+            return resume(Effect.fail(new Error("Received empty response from Niri")))
+          }
+          const parsed: Niri.Reply = JSON.parse(line)
+          if ("Err" in parsed) {
+            return resume(Effect.fail(new Error(parsed.Err)))
+          }
+          return resume(Effect.succeed(parsed.Ok))
         })
-
-        // Request the persistent event stream
-        let requestPayload = '"EventStream"\n'
-
-        outStream.write_all_async(requestPayload, GLib.PRIORITY_DEFAULT, null, (_, writeRes) => {
-          outStream.write_all_finish(writeRes)
-          this._readNextLine(inStream)
-        })
-      } catch (e) {
-        console.error("Failed to connect to Niri IPC:", e)
-      }
-    })
-  }
-
-  private _readNextLine(inStream: Gio.DataInputStream) {
-    inStream.read_line_async(GLib.PRIORITY_DEFAULT, null, (_, res) => {
-      try {
-        let [line, length] = inStream.read_line_finish_utf8(res)
-
-        if (line !== null) {
-          this._handleEvent(line)
-          // Queue the next read iteration
-          this._readNextLine(inStream)
-        } else {
-          console.error("Niri IPC event stream closed by the server.")
-        }
-      } catch (e) {
-        console.error("Error reading from Niri event stream:", e)
-      }
-    })
-  }
-
-  private _handleEvent(line: string) {
-    try {
-      let eventObj = JSON.parse(line)
-      let eventName = Object.keys(eventObj)[0]
-      let payload = eventObj[eventName]
-      let payloadStr = JSON.stringify(payload || {})
-
-      // Calling the decorated methods automatically emits the underlying GObject signals
-      this.event(eventName, payloadStr)
-      print(line)
-
-      switch (eventName) {
-        case "WorkspacesChanged":
-          this.workspacesChanged(payloadStr)
-          break
-        case "WorkspaceActivated":
-          this.workspaceActivated(payloadStr)
-          break
-        case "WindowsChanged":
-          this.windowsChanged(payloadStr)
-          break
-        case "WindowOpenedOrChanged":
-          this.windowOpenedOrChanged(payloadStr)
-          break
-        case "WindowClosed":
-          this.windowClosed(payloadStr)
-          break
-        case "WindowFocusChanged":
-          this.windowFocusChanged(payloadStr)
-          break
-        case "KeyboardLayoutsChanged":
-          this.keyboardLayoutsChanged(payloadStr)
-          break
-        case "KeyboardLayoutSwitched":
-          this.keyboardLayoutSwitched(payloadStr)
-          break
-      }
-    } catch (e) {
-      console.error("Failed to parse or emit Niri event:", e)
-    }
-  }
-
-  focusWorkspace(reference: string | number) {
-    try {
-      const command = ["niri", "msg", "action", "focus-workspace", `${reference}`]
-      const process = Gio.Subprocess.new(command, Gio.SubprocessFlags.NONE)
-
-      process.wait_check_async(null, (_, res) => {
-        try {
-          process.wait_check_finish(res)
-        } catch (e) {
-          console.error("Failed to focus workspace:", e)
-        }
       })
-    } catch (e) {
-      console.error("Failed to execute workspace switch:", e)
+    })
+  }
+
+  private async init() {
+    // Initial state sync via one-off requests
+    await this.syncInitialState()
+    // Start long-running event stream
+    this.startWatchSocket()
+  }
+
+  private async syncInitialState() {
+    const reply = await Effect.runPromise(this.message({ type: "FocusedWindow" }))
+  }
+
+  private startWatchSocket() {
+    const client = new Gio.SocketClient()
+    const address = this.getSocketAddress()
+
+    client.connect_async(address, null, (client, result) => {
+      const connection = client?.connect_finish(result)
+      if (!connection) return
+      const output = new Gio.DataOutputStream({ base_stream: connection.get_output_stream() })
+      const input = new Gio.DataInputStream({ base_stream: connection.get_input_stream() })
+
+      // Request event stream mode
+      output.put_string(`"EventStream"\n`, null)
+
+      // Start recursive reading loop
+      this.readEvent(input)
+    })
+  }
+
+  private readEvent(input: Gio.DataInputStream) {
+    input.read_line_async(GLib.PRIORITY_DEFAULT, null, (stream, result) => {
+      if (!stream) return
+      const [line] = stream.read_line_finish_utf8(result)
+      if (line) {
+        const eventObj = JSON.parse(line)
+        const eventType = Object.keys(eventObj)[0] as Niri.EventType
+        const event: Niri.Event = {
+          type: eventType,
+          ...eventObj[eventType],
+        }
+        this.handleEvent(event)
+        this.readEvent(stream) // Read next line
+      }
+    })
+  }
+
+  // Parse events and update state
+  private handleEvent(event: Niri.Event) {
+    switch (event.type) {
+      case "WindowsChanged":
+        this.windows = event.windows
+        this.focusedWindow = event.windows.find((w) => w.isFocused) ?? ({} as Niri.Window)
+        break
+      case "WindowFocusChanged":
+        this.focusedWindow = this.windows.find((w) => w.id === event.id) ?? ({} as Niri.Window)
+        break
+      case "WindowLayoutsChanged":
+        break
+      // Handle other events as needed...
     }
   }
 }
-
-export const niri = new NiriClient()

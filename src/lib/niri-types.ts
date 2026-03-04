@@ -1,78 +1,360 @@
-// Base Types
+export type Request =
+  | { type: "Version" }
+  | { type: "Outputs" }
+  | { type: "Workspaces" }
+  | { type: "Windows" }
+  | { type: "Layers" }
+  | { type: "KeyboardLayouts" }
+  | { type: "FocusedOutput" }
+  | { type: "FocusedWindow" }
+  | { type: "PickWindow" }
+  | { type: "PickColor" }
+  | { type: "Action"; action: Action }
+  | { type: "Output"; output: string; action: OutputAction }
+  | { type: "EventStream" }
+  | { type: "ReturnError" }
+  | { type: "OverviewState" }
+  | { type: "Casts" }
+
+// Core Action Types
+export type Action =
+  | { type: "Quit"; skipConfirmation: boolean }
+  | { type: "PowerOffMonitors" }
+  | { type: "PowerOnMonitors" }
+  | { type: "Spawn"; command: string[] }
+  | { type: "SpawnSh"; command: string }
+  | { type: "DoScreenTransition"; delayMs?: number }
+  | { type: "Screenshot"; showPointer: boolean; path?: string }
+  | { type: "ScreenshotScreen"; writeToDisk: boolean; showPointer: boolean; path?: string }
+  | {
+      type: "ScreenshotWindow"
+      id?: number
+      writeToDisk: boolean
+      showPointer: boolean
+      path?: string
+    }
+  | { type: "ToggleKeyboardShortcutsInhibit" }
+  | { type: "CloseWindow"; id?: number }
+  | { type: "FullscreenWindow"; id?: number }
+  | { type: "ToggleWindowedFullscreen"; id?: number }
+  | { type: "FocusWindow"; id?: number }
+  | { type: "FocusWindowInColumn"; index: number }
+  | { type: "FocusWindowPrevious" }
+  | { type: "FocusColumnLeft" }
+  | { type: "FocusColumnRight" }
+  | { type: "FocusColumnFirst" }
+  | { type: "FocusColumnLast" }
+  | { type: "FocusColumnRightOrFirst" }
+  | { type: "FocusColumnLeftOrLast" }
+  | { type: "FocusColumn"; index: number }
+  | { type: "FocusWindowOrMonitorUp" }
+  | { type: "FocusWindowOrMonitorDown" }
+  | { type: "FocusColumnOrMonitorLeft" }
+  | { type: "FocusColumnOrMonitorRight" }
+  | { type: "FocusWindowDown" }
+  | { type: "FocusWindowUp" }
+  | { type: "FocusWindowDownOrColumnLeft" }
+  | { type: "FocusWindowDownOrColumnRight" }
+  | { type: "FocusWindowUpOrColumnLeft" }
+  | { type: "FocusWindowUpOrColumnRight" }
+  | { type: "FocusWindowOrWorkspaceDown" }
+  | { type: "FocusWindowOrWorkspaceUp" }
+  | { type: "FocusWindowTop" }
+  | { type: "FocusWindowBottom" }
+  | { type: "FocusWindowDownOrTop" }
+  | { type: "FocusWindowUpOrBottom" }
+  | { type: "MoveColumnLeft" }
+  | { type: "MoveColumnRight" }
+  | { type: "MoveColumnToFirst" }
+  | { type: "MoveColumnToLast" }
+  | { type: "MoveColumnToIndex"; index: number }
+  | { type: "MoveColumnLeftOrToMonitorLeft" }
+  | { type: "MoveColumnRightOrToMonitorRight" }
+  | { type: "MoveWindowDown" }
+  | { type: "MoveWindowUp" }
+  | { type: "MoveWindowDownOrToWorkspaceDown" }
+  | { type: "MoveWindowUpOrToWorkspaceUp" }
+  | { type: "ConsumeOrExpelWindowLeft"; id?: number }
+  | { type: "ConsumeOrExpelWindowRight"; id?: number }
+  | { type: "ConsumeWindowIntoColumn" }
+  | { type: "ExpelWindowFromColumn" }
+  | { type: "SwapWindowRight" }
+  | { type: "SwapWindowLeft" }
+  | { type: "ToggleColumnTabbedDisplay" }
+  | { type: "SetColumnDisplay"; display: ColumnDisplay }
+  | { type: "CenterColumn" }
+  | { type: "CenterWindow"; id?: number }
+  | { type: "CenterVisibleColumns" }
+  | { type: "FocusWorkspaceDown" }
+  | { type: "FocusWorkspaceUp" }
+  | { type: "FocusWorkspace"; reference: WorkspaceReference }
+  | { type: "FocusWorkspacePrevious" }
+  | { type: "MoveWindowToWorkspaceDown"; focus: boolean }
+  | { type: "MoveWindowToWorkspaceUp"; focus: boolean }
+  | {
+      type: "MoveWindowToWorkspace"
+      windowId?: number
+      reference: WorkspaceReference
+      focus: boolean
+    }
+  | { type: "MoveColumnToWorkspaceDown"; focus: boolean }
+  | { type: "MoveColumnToWorkspaceUp"; focus: boolean }
+  | { type: "MoveColumnToWorkspace"; reference: WorkspaceReference; focus: boolean }
+  | { type: "MoveWorkspaceDown" }
+  | { type: "MoveWorkspaceUp" }
+  | { type: "SetWorkspaceName"; name: string; workspace?: WorkspaceReference }
+  | { type: "UnsetWorkspaceName"; reference?: WorkspaceReference }
+  | { type: "FocusMonitorLeft" }
+  | { type: "FocusMonitorRight" }
+  | { type: "FocusMonitorDown" }
+  | { type: "FocusMonitorUp" }
+  | { type: "FocusMonitorPrevious" }
+  | { type: "FocusMonitorNext" }
+  | { type: "FocusMonitor"; output: string }
+  | { type: "MoveWindowToMonitorLeft" }
+  | { type: "MoveWindowToMonitorRight" }
+  | { type: "MoveWindowToMonitorDown" }
+  | { type: "MoveWindowToMonitorUp" }
+  | { type: "MoveWindowToMonitorPrevious" }
+  | { type: "MoveWindowToMonitorNext" }
+  | { type: "MoveWindowToMonitor"; id?: number; output: string }
+  | { type: "MoveColumnToMonitorLeft" }
+  | { type: "MoveColumnToMonitorRight" }
+  | { type: "MoveColumnToMonitorDown" }
+  | { type: "MoveColumnToMonitorUp" }
+  | { type: "MoveColumnToMonitorPrevious" }
+  | { type: "MoveColumnToMonitorNext" }
+  | { type: "MoveColumnToMonitor"; output: string }
+  | { type: "SetWindowWidth"; id?: number; change: SizeChange }
+  | { type: "SetWindowHeight"; id?: number; change: SizeChange }
+  | { type: "ResetWindowHeight"; id?: number }
+  | { type: "SwitchPresetColumnWidth" }
+  | { type: "SwitchPresetColumnWidthBack" }
+  | { type: "SwitchPresetWindowWidth"; id?: number }
+  | { type: "SwitchPresetWindowWidthBack"; id?: number }
+  | { type: "SwitchPresetWindowHeight"; id?: number }
+  | { type: "SwitchPresetWindowHeightBack"; id?: number }
+  | { type: "MaximizeColumn" }
+  | { type: "MaximizeWindowToEdges"; id?: number }
+  | { type: "SetColumnWidth"; change: SizeChange }
+  | { type: "ExpandColumnToAvailableWidth" }
+  | { type: "SwitchLayout"; layout: Layout }
+  | { type: "ShowHotkeyOverlay" }
+  | { type: "MoveWorkspaceToMonitorLeft" }
+  | { type: "MoveWorkspaceToMonitorRight" }
+  | { type: "MoveWorkspaceToMonitorDown" }
+  | { type: "MoveWorkspaceToMonitorUp" }
+  | { type: "MoveWorkspaceToMonitorPrevious" }
+  | { type: "MoveWorkspaceToIndex"; index: number; reference?: WorkspaceReference }
+  | { type: "MoveWorkspaceToMonitor"; output: string; reference?: WorkspaceReference }
+  | { type: "MoveWorkspaceToMonitorNext" }
+  | { type: "ToggleDebugTint" }
+  | { type: "DebugToggleOpaqueRegions" }
+  | { type: "DebugToggleDamage" }
+  | { type: "ToggleWindowFloating"; id?: number }
+  | { type: "MoveWindowToFloating"; id?: number }
+  | { type: "MoveWindowToTiling"; id?: number }
+  | { type: "FocusFloating" }
+  | { type: "FocusTiling" }
+  | { type: "SwitchFocusBetweenFloatingAndTiling" }
+  | { type: "MoveFloatingWindow"; id: number; x: number; y: number }
+  | { type: "ToggleWindowRuleOpacity"; id?: number }
+  | { type: "SetDynamicCastWindow"; id?: number }
+  | { type: "SetDynamicCastMonitor"; output?: string }
+  | { type: "ClearDynamicCastTarget" }
+  | { type: "StopCast"; sessionId: number }
+  | { type: "ToggleOverview" }
+  | { type: "OpenOverview" }
+  | { type: "CloseOverview" }
+  | { type: "ToggleWindowUrgent"; id: number }
+  | { type: "SetWindowUrgent"; id: number }
+  | { type: "UnsetWindowUrgent"; id: number }
+  | { type: "LoadConfigFile"; path?: string }
+
+// Supporting Types
+export type SizeChange = { type: "Set"; value: number } | { type: "Adjust"; value: number }
+
+export type WorkspaceReference =
+  | { type: "Index"; index: number }
+  | { type: "Id"; id: number }
+  | { type: "Name"; name: string }
+  | { type: "Direction"; direction: "Left" | "Right" | "Previous" | "Next" | "First" | "Last" }
+
+export type ColumnDisplay = { type: "Default" } | { type: "Stack" } | { type: "Tabbed" }
+
+export type Layout =
+  | { type: "Spiral" }
+  | { type: "Horizontal" }
+  | { type: "Vertical" }
+  | { type: "Tabbed" }
+
+export type Reply = { Ok: Response } | { Err: string }
+
+export type Response =
+  | { type: "Handled" }
+  | { type: "Version"; version: string }
+  | { type: "Outputs"; outputs: Record<string, Output> }
+  | { type: "Workspaces"; workspaces: Workspace[] }
+  | { type: "Windows"; windows: Window[] }
+  | { type: "Layers"; layers: LayerSurface[] }
+  | { type: "KeyboardLayouts"; layouts: KeyboardLayouts }
+  | { type: "FocusedOutput"; output: Output | null }
+  | { type: "FocusedWindow"; window: Window | null }
+  | { type: "PickedWindow"; window: Window | null }
+  | { type: "PickedColor"; color: PickedColor | null }
+  | { type: "OutputConfigChanged"; result: OutputConfigChanged }
+  | { type: "OverviewState"; overview: Overview }
+  | { type: "Casts"; casts: Cast[] }
+
+// Data Structures
+export interface Window {
+  id: number
+  title: string
+  appId: string
+  pid?: number
+  workspaceId?: number
+  isFocused: boolean
+  isFloating: boolean
+  isUrgent: boolean
+  layout: WindowLayout
+  focusTimestamp?: Timestamp
+}
+
+export interface Workspace {
+  id: number
+  idx: number
+  name?: string
+  output: string
+  is_active: boolean
+  active_window_id?: number
+}
+
+export interface Output {
+  name: string
+  make?: string
+  model?: string
+  serial?: string
+  description?: string
+  physical_width: number
+  physical_height: number
+  modes: Mode[]
+  current_mode: Mode
+  preferred_mode?: Mode
+  transform: Transform
+  scale: number
+  adaptive_sync: boolean
+  vrr_supported: boolean
+  logical: LogicalOutput
+}
+
+export interface LayerSurface {
+  namespace: string
+  output: string
+  layer: Layer
+  keyboardInteractivity: LayerSurfaceKeyboardInteractivity
+}
+
+export interface Cast {
+  sessionId: string
+  windowId?: number
+  output?: string
+  kind: CastKind
+  target: CastTarget
+}
+
 export interface Overview {
-  is_open: boolean
+  isOpen: boolean
+}
+
+export interface PickedColor {
+  rgb: [number, number, number]
 }
 
 export interface WindowLayout {
-  // Position of the tiled window in the scrolling layout (column index, tile index inside column)
   pos_in_scrolling_layout: [number, number] | null
-
-  // Size of the tile including decorations (width, height)
   tile_size: [number, number]
-
-  // Visual geometry size of the window itself excluding niri decorations (width, height)
   window_size: [number, number]
-
-  // Top-left position of the tile in the workspace view
   tile_pos_in_workspace_view: [number, number] | null
-
-  // Visual geometry offset within its tile
   window_offset_in_tile: [number, number]
 }
 
-// Placeholder types for complex entities not fully detailed in the schema
-export type Output = Record<string, unknown>
-export type Workspace = { id: number; [key: string]: any }
-export type Window = { id: number; [key: string]: any }
-export type Layer = Record<string, unknown>
-export type KeyboardLayouts = Record<string, unknown>
-export type PickedColor = Record<string, unknown>
-export type Cast = { stream_id: number; [key: string]: any }
-export type Timestamp = Record<string, unknown>
+export interface Mode {
+  width: number
+  height: number
+  refresh: number
+  is_preferred: boolean
+}
 
-// Responses (from standard requests)
-export type Response =
-  | "Handled"
-  | { Version: string }
-  | { Outputs: Record<string, Output> }
-  | { Workspaces: Workspace[] }
-  | { Windows: Window[] }
-  | { Layers: Layer[] }
-  | { KeyboardLayouts: KeyboardLayouts }
-  | { FocusedOutput: Output | null }
-  | { FocusedWindow: Window | null }
-  | { PickedWindow: Window | null }
-  | { PickedColor: PickedColor | null }
-  | { OutputConfigChanged: string | Record<string, unknown> }
-  | { OverviewState: Overview }
-  | { Casts: Cast[] }
+export interface LogicalOutput {
+  x: number
+  y: number
+  width: number
+  height: number
+  scale: number
+  transform: Transform
+}
 
-// The top-level reply from niri, handling Result<Response, String>
-export type Reply = Response | string
+export interface KeyboardLayouts {
+  names: string[]
+  current_index: number
+}
 
-// Events (from the EventStream request)
+export interface Timestamp {
+  secs: number
+  nanos: number
+}
+
+export type OutputAction =
+  | { type: "Disable" }
+  | { type: "Enable"; mode?: Mode }
+  | { type: "Mode"; mode: Mode }
+  | { type: "Scale"; scale: number }
+  | { type: "Transform"; transform: Transform }
+  | { type: "Position"; x: number; y: number }
+  | { type: "AdaptiveSync"; enable: boolean }
+
+export type OutputConfigChanged = "Applied" | "OutputWasMissing"
+
+export type Layer = "Background" | "Bottom" | "Top" | "Overlay"
+export type LayerSurfaceKeyboardInteractivity = "None" | "Exclusive" | "OnDemand"
+export type Transform =
+  | "Normal"
+  | "Rotate90"
+  | "Rotate180"
+  | "Rotate270"
+  | "Flipped"
+  | "Flipped90"
+  | "Flipped180"
+  | "Flipped270"
+export type CastKind = "Output" | "Window"
+export type CastTarget = "Output" | "Window"
+
+// Event Stream Types
 export type Event =
-  | { WorkspacesChanged: { workspaces: Workspace[] } }
-  | { WorkspaceUrgencyChanged: { id: number; urgent: boolean } }
-  | { WorkspaceActivated: { id: number; focused: boolean } }
-  | {
-      WorkspaceActiveWindowChanged: {
-        workspace_id: number
-        active_window_id: number
-      }
-    }
-  | { WindowsChanged: { windows: Window[] } }
-  | { WindowOpenedOrChanged: { window: Window } }
-  | { WindowClosed: { id: number } }
-  | { WindowFocusChanged: { id: number } }
-  | { WindowFocusTimestampChanged: { id: number; focus_timestamp: Timestamp } }
-  | { WindowUrgencyChanged: { id: number; urgent: boolean } }
-  | { WindowLayoutsChanged: { changes: [number, WindowLayout][] } }
-  | { KeyboardLayoutsChanged: { keyboard_layouts: KeyboardLayouts } }
-  | { KeyboardLayoutSwitched: { idx: number } }
-  | { OverviewOpenedOrClosed: { is_open: boolean } }
-  | { ConfigLoaded: { failed: boolean } }
-  | { ScreenshotCaptured: { path: string } }
-  | { CastsChanged: { casts: Cast[] } }
-  | { CastStartedOrChanged: { cast: Cast } }
-  | { CastStopped: { stream_id: number } }
+  // Workspace
+  | { type: "WorkspacesChanged"; workspaces: Workspace[] }
+  | { type: "WorkspaceUrgencyChanged"; id: number; urgent: boolean }
+  | { type: "WorkspaceActivated"; id: number; focused: boolean }
+  | { type: "WorkspaceActiveWindowChanged"; workspace_id: number; active_window_id?: number }
+  // Window
+  | { type: "WindowsChanged"; windows: Window[] }
+  | { type: "WindowOpenedOrChanged"; window: Window }
+  | { type: "WindowClosed"; id: number }
+  | { type: "WindowFocusChanged"; id: number }
+  | { type: "WindowFocusTimestampChanged"; id: number; focus_timestamp: Timestamp }
+  | { type: "WindowMoved"; id: number; workspaceId: number }
+  | { type: "WindowUrgencyChanged"; id: number; urgent: boolean }
+  | { type: "WindowLayoutsChanged"; changes: [number, WindowLayout][] }
+  // System & Devices
+  | { type: "KeyboardLayoutsChanged"; keyboard_layouts: KeyboardLayouts } // 真实字段为 keyboard_layouts
+  | { type: "KeyboardLayoutSwitched"; idx: number }
+  | { type: "ConfigLoaded"; failed: boolean }
+  | { type: "ScreenshotCaptured"; path?: string }
+  | { type: "OutputsChanged"; outputs: Record<string, Output> }
+  | { type: "OverviewOpenedOrClosed"; is_open: boolean }
+  // Screencasts
+  | { type: "CastsChanged"; casts: Cast[] }
+  | { type: "CastStartedOrChanged"; cast: Cast }
+  | { type: "CastStopped"; stream_id: number }
+
+export type EventType = Event["type"]
