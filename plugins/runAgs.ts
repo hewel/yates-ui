@@ -1,22 +1,22 @@
-import { Plugin } from "rolldown";
-import { spawn, execSync } from 'node:child_process';
-import path from "node:path";
+import { spawn, execSync } from "node:child_process"
+import path from "node:path"
+import { Plugin } from "rolldown"
 
 export function runAgs(): Plugin {
-    return {
-        name: "run-ags",
-        writeBundle(options, bundle) {
-            if (!this.meta.watchMode) return;
-            const chunk = Object.values(bundle).find((chunk) => chunk.type === "chunk");
-            if (!chunk) return;
+  return {
+    name: "run-ags",
+    writeBundle(options, bundle) {
+      if (!this.meta.watchMode) return
+      const chunk = Object.values(bundle).find((chunk) => chunk.type === "chunk")
+      if (!chunk) return
 
-            try {
-                execSync('ags quit', { stdio: 'ignore' });
-            } catch (err) { }
+      try {
+        execSync("ags quit", { stdio: "ignore" })
+      } catch (err) {}
 
-            spawn('ags', ['run', path.join(options.dir ?? '', chunk.fileName)], {
-                stdio: 'inherit',
-            });
-        }
-    }
+      spawn("ags", ["run", path.join(options.dir ?? "", chunk.fileName)], {
+        stdio: "inherit",
+      })
+    },
+  }
 }

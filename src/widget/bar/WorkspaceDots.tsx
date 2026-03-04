@@ -1,12 +1,9 @@
-import { For, type Accessor } from "ags"
 import { Gtk } from "ags/gtk4"
+
+import { For, type Accessor } from "ags"
+
 import { niri } from "../../lib/niri"
-import {
-  workspaceRail,
-  workspaceButton,
-  workspaceDot,
-  workspaceDotActive,
-} from "../Bar.css"
+import { workspaceRail, workspaceButton, workspaceDot, workspaceDotActive } from "../Bar.css"
 import { WorkspaceDot } from "./types"
 
 type WorkspaceDotsProps = {

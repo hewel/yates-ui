@@ -1,0 +1,28 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "ignorePatterns": [],
+  "semi": false,
+  "sortImports": {
+    "customGroups": [
+      {
+        "groupName": "gi",
+        "elementNamePattern": ["gi://**"]
+      },
+      {
+        "groupName": "ags",
+        "elementNamePattern": ["ags/**", "gnim/**"]
+      }
+    ],
+    "groups": [
+      "gi",
+      "type-import",
+      "ags",
+      ["value-builtin", "value-external"],
+      "type-internal",
+      "value-internal",
+      ["type-parent", "type-sibling", "type-index"],
+      ["value-parent", "value-sibling", "value-index"],
+      "unknown"
+    ]
+  }
+}

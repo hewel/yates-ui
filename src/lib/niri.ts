@@ -1,7 +1,9 @@
-import GObject, { register, signal, getter } from "gnim/gobject"
-import { Effect, Console } from "effect"
-import GLib from "gi://GLib"
 import Gio from "gi://Gio"
+import GLib from "gi://GLib"
+
+import GObject, { register, signal, getter } from "gnim/gobject"
+
+import { Effect, Console } from "effect"
 
 export namespace NiriClient {
   export interface SignalSignatures extends GObject.Object.SignalSignatures {
@@ -85,15 +87,10 @@ export class NiriClient extends GObject.Object {
         // Request the persistent event stream
         let requestPayload = '"EventStream"\n'
 
-        outStream.write_all_async(
-          requestPayload,
-          GLib.PRIORITY_DEFAULT,
-          null,
-          (_, writeRes) => {
-            outStream.write_all_finish(writeRes)
-            this._readNextLine(inStream)
-          },
-        )
+        outStream.write_all_async(requestPayload, GLib.PRIORITY_DEFAULT, null, (_, writeRes) => {
+          outStream.write_all_finish(writeRes)
+          this._readNextLine(inStream)
+        })
       } catch (e) {
         console.error("Failed to connect to Niri IPC:", e)
       }
@@ -162,13 +159,7 @@ export class NiriClient extends GObject.Object {
 
   focusWorkspace(reference: string | number) {
     try {
-      const command = [
-        "niri",
-        "msg",
-        "action",
-        "focus-workspace",
-        `${reference}`,
-      ]
+      const command = ["niri", "msg", "action", "focus-workspace", `${reference}`]
       const process = Gio.Subprocess.new(command, Gio.SubprocessFlags.NONE)
 
       process.wait_check_async(null, (_, res) => {

@@ -32,10 +32,10 @@ Use this skill when asked to write styles, components, or themes for a GTK 4 app
    - [cite_start]`border-radius` becomes `borderRadius` [cite: 6]
 
 3. **Custom Properties (Variables):**
-   [cite_start]GTK supports custom properties defined as `--prop: red;`[cite: 156, 157]. [cite_start]In Vanilla Extract, CSS variables must be nested within the `vars` key[cite: 17]. 
+   [cite_start]GTK supports custom properties defined as `--prop: red;`[cite: 156, 157]. [cite_start]In Vanilla Extract, CSS variables must be nested within the `vars` key[cite: 17].
 
 4. **Selectors (Pseudo & Complex):**
-   - [cite_start]**Simple Pseudo Selectors:** Simple pseudo selectors that don't take any parameters can be used at the top level alongside the other CSS properties[cite: 32, 33]. 
+   - [cite_start]**Simple Pseudo Selectors:** Simple pseudo selectors that don't take any parameters can be used at the top level alongside the other CSS properties[cite: 32, 33].
    - [cite_start]**Complex Selectors:** More complex rules can be written using the `selectors` key[cite: 36]. [cite_start]All selectors must target the `&` character which is a reference to the current element[cite: 38].
 
 5. **Media Queries (GTK 4.20+):**
@@ -51,40 +51,41 @@ Use this skill when asked to write styles, components, or themes for a GTK 4 app
 ## Example Usage
 
 ```typescript
-import { style } from '@vanilla-extract/css';
+import { style } from "@vanilla-extract/css"
 
 export const gtkCard = style({
   // Standard properties in camelCase
-  minWidth: '200px',
-  padding: '12px',
-  backgroundColor: 'white',
-  borderRadius: '8px',
+  minWidth: "200px",
+  padding: "12px",
+  backgroundColor: "white",
+  borderRadius: "8px",
 
   // GTK specific properties in PascalCase
   GtkDpi: 96,
-  GtkIconShadow: '0 1px 2px rgba(0,0,0,0.2)',
+  GtkIconShadow: "0 1px 2px rgba(0,0,0,0.2)",
 
   // Simple pseudo-classes at top level
-  ':hover': {
-    backgroundColor: 'oklab(0.9 0 0)' // Modern CSS colors are supported in GTK
+  ":hover": {
+    backgroundColor: "oklab(0.9 0 0)", // Modern CSS colors are supported in GTK
   },
 
   // Complex selectors using '&'
   selectors: {
-    '&:focus:not(:active)': {
-      outlineStyle: 'solid'
-    }
+    "&:focus:not(:active)": {
+      outlineStyle: "solid",
+    },
   },
 
   // Nested custom properties
   vars: {
-    '--card-accent-color': 'blue'
+    "--card-accent-color": "blue",
   },
-  
+
   // GTK 4.20+ Media queries embedded directly
-  '@media': {
-    '(prefers-color-scheme: dark)': {
-      backgroundColor: '#333'
-    }
-  }
-});
+  "@media": {
+    "(prefers-color-scheme: dark)": {
+      backgroundColor: "#333",
+    },
+  },
+})
+```

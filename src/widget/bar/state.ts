@@ -1,4 +1,5 @@
 import { createConnection } from "ags"
+
 import { niri } from "../../lib/niri"
 import { BarState, Workspace, WorkspaceDot, Window, emptyState } from "./types"
 
@@ -40,20 +41,22 @@ export function getWorkspaceDots(state: BarState): WorkspaceDot[] {
       isActive: workspace.id === state.activeWorkspaceId,
     }))
 }
-export const windows = createConnection(
-  "",
-  [niri, "windows-changed", (_, payloadStr) => {
+export const windows = createConnection("", [
+  niri,
+  "windows-changed",
+  (_, payloadStr) => {
     const payload = parsePayload<{ windows?: Window[] }>(payloadStr)
     const windows = payload?.windows ?? []
     const focusedWindow = windows.find((window) => window.is_focused)
 
     return focusedWindow?.title ?? ""
-  }],
-)
+  },
+])
 
-export const barState = createConnection(
-  emptyState,
-  [niri, "event", (eventName, payloadStr, currentState) => {
+export const barState = createConnection(emptyState, [
+  niri,
+  "event",
+  (eventName, payloadStr, currentState) => {
     switch (eventName) {
       case "WorkspacesChanged": {
         const payload = parsePayload<{ workspaces?: Workspace[] }>(payloadStr)
@@ -170,5 +173,5 @@ export const barState = createConnection(
       default:
         return currentState
     }
-  }],
-)
+  },
+])

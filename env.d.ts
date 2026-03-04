@@ -20,7 +20,7 @@ declare module "*.css" {
   export default content
 }
 
-declare module 'virtual:vanilla-bundle-url' {
-  const url: string;
-  export default url;
+declare module "virtual:vanilla-bundle-url" {
+  const url: string
+  export default url
 }

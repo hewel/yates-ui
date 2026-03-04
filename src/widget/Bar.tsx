@@ -1,19 +1,14 @@
-import app from "ags/gtk4/app"
-import { Astal, Gtk, Gdk } from "ags/gtk4"
 import Pango from "gi://Pango"
-import { createPoll } from "ags/time"
-import { format } from "date-fns"
-import WorkspaceDots from "./bar/WorkspaceDots"
-import { barState, getWorkspaceDots } from "./bar/state"
 
-import {
-  bar,
-  content,
-  leading,
-  windowTitle,
-  dateLabel,
-  metaLabel,
-} from "./Bar.css"
+import { Astal, Gtk, Gdk } from "ags/gtk4"
+import app from "ags/gtk4/app"
+import { createPoll } from "ags/time"
+
+import { format } from "date-fns"
+
+import { bar, content, leading, windowTitle, dateLabel, metaLabel } from "./Bar.css"
+import { barState, getWorkspaceDots } from "./bar/state"
+import WorkspaceDots from "./bar/WorkspaceDots"
 
 const dateValue = createPoll("", 1000, () => {
   return format(new Date(), "EEE hh:mm")
@@ -53,12 +48,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
           />
         </box>
 
-        <label
-          $type="center"
-          class={dateLabel}
-          xalign={0.5}
-          label={dateValue}
-        />
+        <label $type="center" class={dateLabel} xalign={0.5} label={dateValue} />
 
         <label
           $type="end"
