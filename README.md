@@ -22,7 +22,7 @@ A sleek, modern status bar for [Niri](https://github.com/YaLTeR/niri) Wayland co
 bun install
 
 # Generate AGS type definitions
-ags types -d ./
+ags types -u -d ./
 ```
 
 ## Development
