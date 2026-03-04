@@ -36,6 +36,7 @@ export default defineConfig({
 
       // Crucial for GObject.Object registration: prevents class names from being mangled
       keepNames: true,
+      minifySyntax: true,
     }),
     vanillaExtractPlugin({
       extract: {
