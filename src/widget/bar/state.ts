@@ -40,6 +40,16 @@ export function getWorkspaceDots(state: BarState): WorkspaceDot[] {
       isActive: workspace.id === state.activeWorkspaceId,
     }))
 }
+export const windows = createConnection(
+  "",
+  [niri, "windows-changed", (_, payloadStr) => {
+    const payload = parsePayload<{ windows?: Window[] }>(payloadStr)
+    const windows = payload?.windows ?? []
+    const focusedWindow = windows.find((window) => window.is_focused)
+
+    return focusedWindow?.title ?? ""
+  }],
+)
 
 export const barState = createConnection(
   emptyState,
