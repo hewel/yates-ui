@@ -1,7 +1,7 @@
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 
-import GObject, { register, signal, getter, property } from "gnim/gobject"
+import GObject, { register, property } from "gnim/gobject"
 
 import { Effect, pipe } from "effect"
 import { match, P } from "ts-pattern"
@@ -34,9 +34,9 @@ export class NiriService extends GObject.Object {
   }
 
   // Send a synchronous/one-off command
-  public message(request: Niri.Request) {
+  public message<R extends Niri.Request>(request: R): Effect.Effect<Niri.ResponseFor<R>, Error> {
     const reqString = pipe(
-      match(request)
+      match<Niri.Request>(request)
         .with(
           {
             type: P.union("Action", "Output"),
@@ -49,7 +49,7 @@ export class NiriService extends GObject.Object {
       (obj) => JSON.stringify(obj) + "\n",
     )
 
-    return Effect.callback<Niri.Response, Error>((resume) => {
+    return Effect.callback<Niri.ResponseFor<R>, Error>((resume) => {
       const client = new Gio.SocketClient()
       const address = this.getSocketAddress()
       client.connect_async(address, null, (client, result) => {
@@ -71,10 +71,24 @@ export class NiriService extends GObject.Object {
           if ("Err" in parsed) {
             return resume(Effect.fail(new Error(parsed.Err)))
           }
-          return resume(Effect.succeed(parsed.Ok))
+          const payload = this.extractResponsePayload(parsed.Ok)
+
+          if (request.type === "FocusedWindow" && payload == null) {
+            return resume(Effect.fail(new Error("FocusedWindow is null")))
+          }
+          return resume(Effect.succeed(payload as Niri.ResponseFor<R>))
         })
       })
     })
+  }
+
+  private extractResponsePayload(response: Niri.ResponseWire): unknown {
+    const firstEntry = Object.entries(response)[0]
+    if (!firstEntry) return undefined
+
+    const [, inner] = firstEntry
+
+    return inner
   }
 
   private async init() {
@@ -85,7 +99,8 @@ export class NiriService extends GObject.Object {
   }
 
   private async syncInitialState() {
-    const reply = await Effect.runPromise(this.message({ type: "FocusedWindow" }))
+    const focusedWindow = await Effect.runPromise(this.message({ type: "FocusedWindow" }))
+    this.focusedWindow = focusedWindow
   }
 
   private startWatchSocket() {
@@ -128,7 +143,6 @@ export class NiriService extends GObject.Object {
     switch (event.type) {
       case "WindowsChanged":
         this.windows = event.windows
-        this.focusedWindow = event.windows.find((w) => w.isFocused) ?? ({} as Niri.Window)
         break
       case "WindowFocusChanged":
         this.focusedWindow = this.windows.find((w) => w.id === event.id) ?? ({} as Niri.Window)

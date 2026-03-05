@@ -188,7 +188,7 @@ export type Layout =
   | { type: "Vertical" }
   | { type: "Tabbed" }
 
-export type Reply = { Ok: Response } | { Err: string }
+export type Reply = { Ok: ResponseWire } | { Err: string }
 
 export type Response =
   | { type: "Handled" }
@@ -358,3 +358,53 @@ export type Event =
   | { type: "CastStopped"; stream_id: number }
 
 export type EventType = Event["type"]
+
+// Type gymnastics: map Request type → Response type
+type RequestToResponseType = {
+  Version: "Version"
+  Outputs: "Outputs"
+  Workspaces: "Workspaces"
+  Windows: "Windows"
+  Layers: "Layers"
+  KeyboardLayouts: "KeyboardLayouts"
+  FocusedOutput: "FocusedOutput"
+  FocusedWindow: "FocusedWindow"
+  PickWindow: "PickedWindow"
+  PickColor: "PickedColor"
+  Action: "Handled"
+  Output: "OutputConfigChanged"
+  EventStream: never
+  ReturnError: never
+  OverviewState: "OverviewState"
+  Casts: "Casts"
+}
+
+type ResponseTypeForRequest<R extends Request> = RequestToResponseType[R["type"]]
+
+type NormalizedResponsePayload<TType extends keyof ResponseMap> = TType extends "FocusedWindow"
+  ? NonNullable<ResponseMap[TType]>
+  : ResponseMap[TType]
+
+export type ResponseFor<R extends Request> =
+  ResponseTypeForRequest<R> extends keyof ResponseMap
+    ? NormalizedResponsePayload<ResponseTypeForRequest<R>>
+    : never
+
+// Transform: map Response type string → its payload value type
+// e.g. ResponseMap["FocusedWindow"] = Window | null
+//      ResponseMap["Windows"]       = Window[]
+//      ResponseMap["Handled"]        = undefined
+type ResponsePayload<R extends Response> =
+  Omit<R, "type"> extends infer P ? (keyof P extends never ? undefined : P[keyof P]) : never
+
+export type ResponseMap = {
+  [R in Response as R["type"]]: ResponsePayload<R>
+}
+
+type ResponseWireMap = {
+  [R in Response as R["type"]]: Omit<R, "type">
+}
+
+export type ResponseWire = {
+  [T in keyof ResponseWireMap]: { [K in T]: ResponseWireMap[T] }
+}[keyof ResponseWireMap]
