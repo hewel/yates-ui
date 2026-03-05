@@ -81,7 +81,7 @@ export type Action =
   | { type: "SwapWindowRight" }
   | { type: "SwapWindowLeft" }
   | { type: "ToggleColumnTabbedDisplay" }
-  | { type: "SetColumnDisplay"; display: ColumnDisplay }
+  | { type: "SetColumnDisplay"; display: "Default" | "Stack" | "Tabbed" }
   | { type: "CenterColumn" }
   | { type: "CenterWindow"; id?: number }
   | { type: "CenterVisibleColumns" }
@@ -138,7 +138,7 @@ export type Action =
   | { type: "MaximizeWindowToEdges"; id?: number }
   | { type: "SetColumnWidth"; change: SizeChange }
   | { type: "ExpandColumnToAvailableWidth" }
-  | { type: "SwitchLayout"; layout: Layout }
+  | { type: "SwitchLayout"; layout: "Spiral" | "Horizontal" | "Vertical" | "Tabbed" }
   | { type: "ShowHotkeyOverlay" }
   | { type: "MoveWorkspaceToMonitorLeft" }
   | { type: "MoveWorkspaceToMonitorRight" }
@@ -178,15 +178,10 @@ export type WorkspaceReference =
   | { type: "Index"; index: number }
   | { type: "Id"; id: number }
   | { type: "Name"; name: string }
-  | { type: "Direction"; direction: "Left" | "Right" | "Previous" | "Next" | "First" | "Last" }
+  | WorkspaceDirection
 
-export type ColumnDisplay = { type: "Default" } | { type: "Stack" } | { type: "Tabbed" }
+export type WorkspaceDirection = "Left" | "Right" | "Previous" | "Next" | "First" | "Last"
 
-export type Layout =
-  | { type: "Spiral" }
-  | { type: "Horizontal" }
-  | { type: "Vertical" }
-  | { type: "Tabbed" }
 
 export type Reply = { Ok: ResponseWire } | { Err: string }
 
@@ -381,13 +376,11 @@ type RequestToResponseType = {
 
 type ResponseTypeForRequest<R extends Request> = RequestToResponseType[R["type"]]
 
-type NormalizedResponsePayload<TType extends keyof ResponseMap> = TType extends "FocusedWindow"
-  ? NonNullable<ResponseMap[TType]>
-  : ResponseMap[TType]
-
 export type ResponseFor<R extends Request> =
   ResponseTypeForRequest<R> extends keyof ResponseMap
-    ? NormalizedResponsePayload<ResponseTypeForRequest<R>>
+    ? (ResponseTypeForRequest<R> extends "FocusedWindow"
+        ? NonNullable<ResponseMap[ResponseTypeForRequest<R>]>
+        : ResponseMap[ResponseTypeForRequest<R>])
     : never
 
 // Transform: map Response type string → its payload value type
@@ -401,10 +394,6 @@ export type ResponseMap = {
   [R in Response as R["type"]]: ResponsePayload<R>
 }
 
-type ResponseWireMap = {
-  [R in Response as R["type"]]: Omit<R, "type">
-}
-
 export type ResponseWire = {
-  [T in keyof ResponseWireMap]: { [K in T]: ResponseWireMap[T] }
-}[keyof ResponseWireMap]
+  [R in Response as R["type"]]: Omit<R, "type">
+}[Response["type"]]

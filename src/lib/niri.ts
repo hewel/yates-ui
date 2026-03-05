@@ -99,8 +99,7 @@ export class NiriService extends GObject.Object {
   }
 
   private async syncInitialState() {
-    const focusedWindow = await Effect.runPromise(this.message({ type: "FocusedWindow" }))
-    this.focusedWindow = focusedWindow
+    this.focusedWindow = await Effect.runPromise(this.message({ type: "FocusedWindow" }))
   }
 
   private startWatchSocket() {
