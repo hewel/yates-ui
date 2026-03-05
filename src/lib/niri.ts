@@ -3,10 +3,10 @@ import GLib from "gi://GLib"
 
 import GObject, { register, property } from "gnim/gobject"
 
-import { Effect, pipe } from "effect"
-import { match, P } from "ts-pattern"
+import { Effect, Stream, Console } from "effect"
 
-import * as Niri from "./niri-types"
+import * as Niri from "./niri.types"
+import { eventStream, sendMessage } from "./socket"
 
 @register()
 export class NiriService extends GObject.Object {
@@ -27,97 +27,27 @@ export class NiriService extends GObject.Object {
     this.init()
   }
 
-  private getSocketAddress(): Gio.UnixSocketAddress {
-    const socketPath = GLib.getenv("NIRI_SOCKET")
-    if (!socketPath) throw new Error("NIRI_SOCKET environment variable is not set")
-    return Gio.UnixSocketAddress.new(socketPath)
-  }
-
-  // Send a synchronous/one-off command
-  public message<R extends Niri.Request>(request: R): Effect.Effect<Niri.ResponseFor<R>, Error> {
-    const reqString = pipe(
-      match<Niri.Request>(request)
-        .with(
-          {
-            type: P.union("Action", "Output"),
-          },
-          ({ type, ...data }) => ({
-            [type]: data,
-          }),
-        )
-        .otherwise(({ type }) => type),
-      (obj) => JSON.stringify(obj) + "\n",
-    )
-
-    return Effect.callback<Niri.ResponseFor<R>, Error>((resume) => {
-      const client = new Gio.SocketClient()
-      const address = this.getSocketAddress()
-      client.connect_async(address, null, (client, result) => {
-        const connection = client?.connect_finish(result)
-        if (!connection) return
-        const output = new Gio.DataOutputStream({ base_stream: connection.get_output_stream() })
-        const input = new Gio.DataInputStream({ base_stream: connection.get_input_stream() })
-        output.put_string(reqString, null)
-
-        input.read_line_async(GLib.PRIORITY_DEFAULT, null, (inStream, readRes) => {
-          if (!inStream) {
-            return resume(Effect.fail(new Error("Failed to read response from Niri")))
-          }
-          const [line] = inStream.read_line_finish_utf8(readRes)
-          if (!line) {
-            return resume(Effect.fail(new Error("Received empty response from Niri")))
-          }
-          const parsed: Niri.Reply = JSON.parse(line)
-          if ("Err" in parsed) {
-            return resume(Effect.fail(new Error(parsed.Err)))
-          }
-          const payload = this.extractResponsePayload(parsed.Ok)
-
-          if (request.type === "FocusedWindow" && payload == null) {
-            return resume(Effect.fail(new Error("FocusedWindow is null")))
-          }
-          return resume(Effect.succeed(payload as Niri.ResponseFor<R>))
-        })
-      })
-    })
-  }
-
-  private extractResponsePayload(response: Niri.ResponseWire): unknown {
-    const firstEntry = Object.entries(response)[0]
-    if (!firstEntry) return undefined
-
-    const [, inner] = firstEntry
-
-    return inner
-  }
-
-  private async init() {
+  private init() {
     // Initial state sync via one-off requests
-    await this.syncInitialState()
-    // Start long-running event stream
+    this.syncInitialState()
     this.startWatchSocket()
   }
 
   private async syncInitialState() {
-    this.focusedWindow = await Effect.runPromise(this.message({ type: "FocusedWindow" }))
+    this.focusedWindow = await Effect.runPromise(sendMessage({ type: "FocusedWindow" }))
+    
+  }
+
+  // Send a synchronous/one-off command
+  public message<R extends Niri.Request>(request: R): Effect.Effect<Niri.ResponseFor<R>, Error> {
+    return sendMessage(request)
   }
 
   private startWatchSocket() {
-    const client = new Gio.SocketClient()
-    const address = this.getSocketAddress()
-
-    client.connect_async(address, null, (client, result) => {
-      const connection = client?.connect_finish(result)
-      if (!connection) return
-      const output = new Gio.DataOutputStream({ base_stream: connection.get_output_stream() })
-      const input = new Gio.DataInputStream({ base_stream: connection.get_input_stream() })
-
-      // Request event stream mode
-      output.put_string(`"EventStream"\n`, null)
-
-      // Start recursive reading loop
-      this.readEvent(input)
-    })
+    eventStream.pipe(
+      Stream.runForEach((event) => Console.log(event)),
+      Effect.runPromise,
+    )
   }
 
   private readEvent(input: Gio.DataInputStream) {
