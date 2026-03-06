@@ -17,7 +17,7 @@
     "lightningcss": "^1.31.1",
     "oxfmt": "^0.36.0",
     "oxlint": "^1.51.0",
-    "rolldown": "^1.0.0-rc.7",
+    "rolldown": "1.0.0-rc.6",
     "rollup-plugin-esbuild": "^6.2.1"
   },
   "peerDependencies": {
