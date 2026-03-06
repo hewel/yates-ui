@@ -1,7 +1,7 @@
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 
-import { Data, Effect, Stream, Console, Queue, Cause } from "effect"
+import { Data, Effect, Stream, Queue, Cause } from "effect"
 import { match, P } from "ts-pattern"
 
 import * as Niri from "./niri.types"
@@ -21,6 +21,12 @@ type NiriStreamError = ConnectionError | JsonParseError
 const socketAddress = Effect.fromNullishOr(GLib.getenv("NIRI_SOCKET")).pipe(
   Effect.map((socketPath) => Gio.UnixSocketAddress.new(socketPath)),
 )
+export const jsonParse = <R = object>(str: string) =>
+  Effect.try({
+    try: () => JSON.parse(str) as R,
+    catch: (error) => new JsonParseError({ line: str, cause: error }),
+  })
+
 export const socketClient = Effect.sync(() => new Gio.SocketClient())
 
 export const connectGioClient = Effect.Do.pipe(
@@ -46,10 +52,10 @@ export const connectGioClient = Effect.Do.pipe(
     )
   }),
 )
-const putString = (output: Gio.DataOutputStream, str: string) =>
+export const putString = (output: Gio.DataOutputStream, str: string) =>
   Effect.sync(() => output.put_string(str, null))
 
-function formatRequest<R extends Niri.Request>(request: R): string {
+export function formatRequest<R extends Niri.Request>(request: R): string {
   const obj = match<Niri.Request>(request)
     .with({ type: P.union("Action", "Output") }, ({ type, ...data }) => ({ [type]: data }))
     .otherwise(({ type }) => type)
@@ -58,63 +64,68 @@ function formatRequest<R extends Niri.Request>(request: R): string {
 const extractPayload = <R extends Niri.Request>(response: Niri.ResponseWire) =>
   Effect.fromNullishOr<Niri.ResponseFor<R>>(Object.entries(response)[0]?.[1])
 
-const readAndParseEvent = (
-  input: Gio.DataInputStream,
-): Effect.Effect<Niri.Event, NiriStreamError | Cause.NoSuchElementError> => {
-  return Effect.callback((resume) => {
-    let cancelled = false
-    input.read_line_async(GLib.PRIORITY_DEFAULT, null, (stream, res) => {
-      if (cancelled) {
-        resume(Effect.interrupt)
-        return
-      }
-      if (!stream) {
-        resume(Effect.fail(new Cause.NoSuchElementError("No stream"))) // Signal end of stream
-        return
-      }
-      try {
-        const [line] = stream.read_line_finish_utf8(res)
-        if (!line) {
-          resume(Effect.fail(new Cause.NoSuchElementError("No line"))) // Signal end of stream
-          return
-        }
-        const eventObj = JSON.parse(line)
-        const type = Object.keys(eventObj)[0] as Niri.EventType
-        resume(Effect.succeed({ type, ...eventObj[type] } as Niri.Event))
-      } catch (error) {
-        resume(Effect.fail(new JsonParseError({ line: "failed to parse", cause: error })))
-      }
-    })
-    return Effect.sync(() => {
-      cancelled = true
-    })
-  })
-}
-
-export const createEventStream = Effect.acquireUseRelease(
-  connectGioClient.pipe(Effect.tap(({ output }) => putString(output, `"EventStream"`))),
-  ({ input }) =>
-    Effect.succeed(
-      Stream.callback<Niri.Event, NiriStreamError>((queue) =>
-        readAndParseEvent(input)
-          .pipe(
-            Effect.flatMap((event) => Queue.offer(queue, event)),
-            Effect.catch(() => Effect.as(Queue.end(queue), undefined as any)),
-          )
-          .pipe(Effect.forever())
-          .pipe(
-            Effect.catchCause((cause) => {
-              Queue.failCauseUnsafe(queue, cause)
-              return Effect.void
+const cancellable = Effect.acquireRelease(
+  Effect.sync(() => new Gio.Cancellable()),
+  (cancellable) =>
+    Effect.sync(() => {
+      cancellable.cancel()
+    }),
+)
+export const eventStream = Stream.callback<string, NiriStreamError | Cause.NoSuchElementError>(
+  (queue) =>
+    Effect.zip(
+      connectGioClient.pipe(
+        Effect.tap(({ output }) =>
+          putString(
+            output,
+            formatRequest({
+              type: "EventStream",
             }),
           ),
+        ),
+      ),
+      cancellable,
+    ).pipe(
+      Effect.flatMap(([{ input }, cancellable]) =>
+        Effect.sync(() => {
+          const loop = () =>
+            input.read_line_async(GLib.PRIORITY_DEFAULT, cancellable, (stream, res) => {
+              const line = stream?.read_line_finish_utf8(res)?.[0]
+              if (!line) {
+                Queue.endUnsafe(queue) // Signal end of stream
+                return
+              }
+              Queue.offerUnsafe(queue, line)
+              loop()
+            })
+          try {
+            loop()
+          } catch (error) {
+            if (cancellable.is_cancelled()) {
+              Queue.endUnsafe(queue)
+              return
+            }
+            Queue.failCauseUnsafe(
+              queue,
+              Cause.fail(
+                new ConnectionError({ message: "Failed to close connection", cause: error }),
+              ),
+            )
+          }
+        }),
       ),
     ),
-  ({ close }) => {
-    console.log("close")
-
-    return close
+  {
+    bufferSize: 100, // Buffer up to 100 lines
+    strategy: "sliding",
   },
+).pipe(
+  Stream.mapEffect((line) => jsonParse<any>(line)),
+  Stream.mapEffect((parsed) =>
+    Effect.fromNullishOr(Object.keys(parsed)[0] as Niri.EventType).pipe(
+      Effect.map((eventType) => ({ type: eventType, ...parsed[eventType] }) as Niri.Event),
+    ),
+  ),
 )
 
 export const sendMessage = <R extends Niri.Request>(request: R) => {
@@ -130,13 +141,7 @@ export const sendMessage = <R extends Niri.Request>(request: R) => {
         ),
       )
       .pipe(
-        Effect.flatMap((line) =>
-          Effect.try({
-            try: () => JSON.parse(line) as Niri.Reply,
-            catch: (error) =>
-              new JsonParseError({ line: "failed to parse response", cause: error }),
-          }),
-        ),
+        Effect.flatMap(jsonParse<Niri.Reply>),
         Effect.flatMap((parsed) =>
           "Err" in parsed ? Effect.fail(new Error(parsed.Err)) : Effect.succeed(parsed.Ok),
         ),
@@ -144,5 +149,3 @@ export const sendMessage = <R extends Niri.Request>(request: R) => {
       )
   return Effect.acquireUseRelease(connectGioClient, use, ({ close }) => close)
 }
-
-export const eventStream = Stream.scoped(Stream.fromEffect(createEventStream))

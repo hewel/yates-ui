@@ -182,7 +182,6 @@ export type WorkspaceReference =
 
 export type WorkspaceDirection = "Left" | "Right" | "Previous" | "Next" | "First" | "Last"
 
-
 export type Reply = { Ok: ResponseWire } | { Err: string }
 
 export type Response =
@@ -341,7 +340,7 @@ export type Event =
   | { type: "WindowUrgencyChanged"; id: number; urgent: boolean }
   | { type: "WindowLayoutsChanged"; changes: [number, WindowLayout][] }
   // System & Devices
-  | { type: "KeyboardLayoutsChanged"; keyboard_layouts: KeyboardLayouts } // 真实字段为 keyboard_layouts
+  | { type: "KeyboardLayoutsChanged"; keyboard_layouts: KeyboardLayouts }
   | { type: "KeyboardLayoutSwitched"; idx: number }
   | { type: "ConfigLoaded"; failed: boolean }
   | { type: "ScreenshotCaptured"; path?: string }
@@ -378,9 +377,9 @@ type ResponseTypeForRequest<R extends Request> = RequestToResponseType[R["type"]
 
 export type ResponseFor<R extends Request> =
   ResponseTypeForRequest<R> extends keyof ResponseMap
-    ? (ResponseTypeForRequest<R> extends "FocusedWindow"
-        ? NonNullable<ResponseMap[ResponseTypeForRequest<R>]>
-        : ResponseMap[ResponseTypeForRequest<R>])
+    ? ResponseTypeForRequest<R> extends "FocusedWindow"
+      ? NonNullable<ResponseMap[ResponseTypeForRequest<R>]>
+      : ResponseMap[ResponseTypeForRequest<R>]
     : never
 
 // Transform: map Response type string → its payload value type

@@ -35,7 +35,6 @@ export class NiriService extends GObject.Object {
 
   private async syncInitialState() {
     this.focusedWindow = await Effect.runPromise(sendMessage({ type: "FocusedWindow" }))
-    
   }
 
   // Send a synchronous/one-off command
