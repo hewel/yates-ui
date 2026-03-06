@@ -10,6 +10,7 @@ export default defineConfig({
   input: "src/app.ts",
   watch: {
     include: ["src/**/*"],
+    exclude: ["node_modules/**", "dist/**"],
   },
   output: {
     dir: "./dist",
