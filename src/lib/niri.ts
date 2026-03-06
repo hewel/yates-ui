@@ -3,7 +3,7 @@ import GLib from "gi://GLib"
 
 import GObject, { register, property } from "gnim/gobject"
 
-import { Effect, Stream, Console } from "effect"
+import { Effect, Stream, Console, Reducer } from "effect"
 
 import * as Niri from "./niri.types"
 import { eventStream, sendMessage } from "./socket"
@@ -44,29 +44,10 @@ export class NiriService extends GObject.Object {
 
   private startWatchSocket() {
     eventStream.pipe(
-      Stream.runForEach((event) => Console.log(event)),
+      Stream.runForEach((event) => Effect.sync(() => this.handleEvent(event))),
       Effect.runPromise,
     )
   }
-
-  private readEvent(input: Gio.DataInputStream) {
-    input.read_line_async(GLib.PRIORITY_DEFAULT, null, (stream, result) => {
-      if (!stream) return
-      const [line] = stream.read_line_finish_utf8(result)
-      if (line) {
-        const eventObj = JSON.parse(line)
-        const eventType = Object.keys(eventObj)[0] as Niri.EventType
-        const event: Niri.Event = {
-          type: eventType,
-          ...eventObj[eventType],
-        }
-        this.handleEvent(event)
-        this.readEvent(stream) // Read next line
-      }
-    })
-  }
-
-  // Parse events and update state
   private handleEvent(event: Niri.Event) {
     switch (event.type) {
       case "WindowsChanged":

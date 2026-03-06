@@ -123,7 +123,7 @@ export const eventStream = Stream.callback<string, NiriStreamError | Cause.NoSuc
   Stream.mapEffect((line) => jsonParse<any>(line)),
   Stream.mapEffect((parsed) =>
     Effect.fromNullishOr(Object.keys(parsed)[0] as Niri.EventType).pipe(
-      Effect.map((eventType) => ({ type: eventType, ...parsed[eventType] }) as Niri.Event),
+      Effect.map((eventType) => ({ type: eventType, ...(typeof parsed[eventType] === "object" ? parsed[eventType] : {}) }) as Niri.Event),
     ),
   ),
 )

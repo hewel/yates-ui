@@ -10,6 +10,7 @@ import { NiriService } from "src/lib/niri"
 
 import { bar, content, leading, windowTitle, dateLabel, metaLabel } from "./Bar.css"
 
+
 const dateValue = createPoll("", 1000, () => {
   return format(new Date(), "EEE hh:mm")
 })
@@ -17,8 +18,8 @@ const dateValue = createPoll("", 1000, () => {
 export default function Bar(gdkmonitor: Gdk.Monitor) {
   const { TOP, LEFT, RIGHT } = Astal.WindowAnchor
   const niri = NiriService.get_default()
-  const focused = createBinding(niri, 'focusedWindow')
-  const title = createComputed(() => focused().title ?? '')
+  const focused = createBinding(niri, "focusedWindow")
+  const title = createComputed(() => focused().title ?? "")
 
   return (
     <window
@@ -51,11 +52,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
         <label $type="center" class={dateLabel} xalign={0.5} label={dateValue} />
 
-        <label
-          $type="end"
-          class={metaLabel}
-          xalign={1}
-        />
+        <label $type="end" class={metaLabel} xalign={1} />
       </centerbox>
     </window>
   )
