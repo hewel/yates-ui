@@ -8,6 +8,7 @@
   "dependencies": {
     "date-fns": "^4.1.0",
     "effect": "4.0.0-beta.28",
+    "immer": "^11.1.4",
     "ts-pattern": "^5.9.0"
   },
   "devDependencies": {
