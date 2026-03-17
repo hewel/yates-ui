@@ -1,7 +1,6 @@
 import GObject, { register, property } from "gnim/gobject"
 
 import { Effect, Stream, SubscriptionRef } from "effect"
-import { produce } from "immer"
 
 import * as Niri from "./niri.types"
 import { eventStream, sendMessage } from "./socket"
@@ -14,22 +13,26 @@ export type NiriState = {
   layout: Niri.WindowLayout
 }
 
-const reducer = (event: Niri.Event) =>
-  produce<NiriState>((state) => {
+const reducer =
+  (event: Niri.Event) =>
+  (state: NiriState): NiriState => {
     switch (event.type) {
       case "WindowsChanged":
-        state.windows = event.windows
-        break
+        return { ...state, windows: event.windows }
       case "WindowFocusChanged":
-        state.focusedWindow = state.windows.find((w) => w.id === event.id) ?? ({} as Niri.Window)
-        break
+        return {
+          ...state,
+          focusedWindow: state.windows.find((w) => w.id === event.id) ?? ({} as Niri.Window),
+        }
       case "WindowLayoutsChanged":
-        break
+        return state
+      default:
+        return state
       // Handle other events as needed...
     }
-  })
+  }
 
-const stateRef = SubscriptionRef.make<NiriState>({
+export const stateRef = SubscriptionRef.make<NiriState>({
   focusedWindow: {} as Niri.Window,
   windows: [],
   focusedWorkspace: {} as Niri.Workspace,
