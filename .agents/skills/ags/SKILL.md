@@ -1,5 +1,5 @@
 ---
-name: ags-widget-coder
+name: ags
 description: Create and modify AGS (Astal Gnim) widgets for Wayland Desktop Shells using Gtk4.
 license: MIT
 compatibility: opencode

@@ -20,12 +20,9 @@ export default defineConfig({
   external: [
     /^gi:\/\//,
     /^resource:\/\//,
-    /^ags$/,
-    /^ags\//,
-    /^gnim$/,
-    /^gnim\//,
     "system",
     "gettext",
+    "console",
   ],
   plugins: [
     esbuild({

@@ -21,6 +21,6 @@ declare module "*.css" {
 }
 
 declare module "virtual:vanilla-bundle-url" {
-  const url: string
-  export default url
+  const bundleUrl: string
+  export default bundleUrl
 }
