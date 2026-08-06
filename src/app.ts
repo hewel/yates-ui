@@ -5,6 +5,8 @@ import style from "virtual:vanilla-bundle-url"
 
 import Bar from "./widget/Bar"
 
+const BAR_ORIENTATION = "vertical"
+
 const app = new Gtk.Application({ application_id: "me.pigmint.yates-ui" })
 
 function loadCss(display: Gdk.Display) {
@@ -32,7 +34,7 @@ app.connect("activate", () => {
   const monitors = display.get_monitors()
   for (let i = 0; i < monitors.get_n_items(); i++) {
     const monitor = monitors.get_item(i)
-    if (monitor instanceof Gdk.Monitor) Bar(monitor, app)
+    if (monitor instanceof Gdk.Monitor) Bar(monitor, app, BAR_ORIENTATION)
   }
 })
 

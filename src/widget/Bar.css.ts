@@ -7,9 +7,15 @@ export const bar = style({
   color: "#ffffff",
 })
 
-export const activities = style({
-  fontWeight: "700",
-  fontSize: "0.8rem",
+export const barVertical = style({
+  backgroundColor: "#1d1d1d",
+  minWidth: "34px",
+  padding: "8px 4px",
+  color: "#ffffff",
+})
+
+export const workspaces = style({
+  padding: "2px 0",
 })
 
 export const workspaceButton = style({
@@ -31,6 +37,13 @@ export const workspaceButtonActive = style({
   backgroundColor: "rgba(255, 255, 255, 0.2)",
   color: "#ffffff",
   fontWeight: "700",
+})
+
+export const workspacePopup = style({
+  backgroundColor: "#2a2a2e",
+  borderRadius: "10px",
+  padding: "8px 10px",
+  color: "#ffffff",
 })
 
 export const windowTitle = style({
