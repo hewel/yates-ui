@@ -1,0 +1,4 @@
+interface:
+  display_name: "AGS and Gnim"
+  short_description: "Build GTK4 shells with AGS and Gnim JSX"
+  default_prompt: "Use $ags to build or update an AGS GTK4 widget with correct Gnim JSX and reactive lifecycle patterns."
