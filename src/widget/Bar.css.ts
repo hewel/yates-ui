@@ -1,59 +1,51 @@
 import { style } from "@vanilla-extract/css"
 
 export const bar = style({
-  backgroundColor: "rgba(28, 30, 36, 0.9)",
-  borderBottom: "1px solid rgba(255, 255, 255, 0.12)",
-  minHeight: "24px",
-  padding: "4px 10px",
+  backgroundColor: "#1d1d1d",
+  minHeight: "30px",
+  padding: "0 10px",
+  color: "#ffffff",
 })
 
-export const content = style({})
-
-export const leading = style({
-  minWidth: "180px",
-})
-
-export const workspaceRail = style({
-  minWidth: "12px",
+export const activities = style({
+  fontWeight: "700",
+  fontSize: "0.8rem",
 })
 
 export const workspaceButton = style({
-  minWidth: "12px",
-  minHeight: "12px",
-  padding: "0",
+  minWidth: "18px",
+  minHeight: "18px",
+  padding: "1px 6px",
   border: "none",
+  borderRadius: "9px",
   backgroundColor: "transparent",
+  color: "#c0c4d0",
+  fontWeight: "500",
+  fontSize: "0.78rem",
+  ":hover": {
+    backgroundColor: "rgba(255, 255, 255, 0.12)",
+  },
 })
 
-export const workspaceDot = style({
+export const workspaceButtonActive = style({
+  backgroundColor: "rgba(255, 255, 255, 0.2)",
+  color: "#ffffff",
   fontWeight: "700",
-  fontSize: "0.74rem",
-  color: "#8f95a3",
-  lineHeight: "1.15",
-  minWidth: "10px",
-})
-
-export const workspaceDotActive = style({
-  color: "#eef1f7",
 })
 
 export const windowTitle = style({
   fontWeight: "500",
-  fontSize: "0.82rem",
+  fontSize: "0.8rem",
   color: "#e6e9ef",
-  backgroundColor: "rgba(255, 255, 255, 0.12)",
-  borderRadius: "6px",
-  padding: "2px 8px",
 })
 
-export const dateLabel = style({
-  fontWeight: "600",
-  fontSize: "1rem",
-  color: "#d9deea",
+export const clock = style({
+  fontWeight: "700",
+  fontSize: "0.8rem",
+  color: "#ffffff",
 })
 
-export const metaLabel = style({
-  fontWeight: "600",
-  fontSize: "0.72rem",
-  color: "#b8bfcc",
+export const batteryLabel = style({
+  fontWeight: "500",
+  fontSize: "0.75rem",
 })

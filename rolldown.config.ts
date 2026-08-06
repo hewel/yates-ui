@@ -2,7 +2,7 @@ import { vanillaExtractPlugin } from "@vanilla-extract/rollup-plugin"
 import { defineConfig } from "rolldown"
 import esbuild from "rollup-plugin-esbuild"
 
-import { runAgs } from "./plugins/runAgs"
+import { runGjs } from "./plugins/runGjs"
 import { vanillaCssUrl } from "./plugins/vanillaCssUrl"
 
 export default defineConfig({
@@ -30,7 +30,7 @@ export default defineConfig({
 
       // Transform JSX for AGS
       jsx: "automatic",
-      jsxImportSource: "ags/gtk4",
+      jsxImportSource: "gnim/gtk4",
 
       // Crucial for GObject.Object registration: prevents class names from being mangled
       keepNames: true,
@@ -42,6 +42,6 @@ export default defineConfig({
       },
     }),
     vanillaCssUrl({ fileName: "style.css" }),
-    runAgs(),
+    runGjs(),
   ],
 })
