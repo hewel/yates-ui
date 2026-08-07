@@ -1,11 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import {
-  applyNiriEventLine,
-  focusWorkspaceRequest,
-  initialNiriState,
-  windowsForWorkspace,
-} from "../src/niri/state"
+import { applyNiriEventLine, focusWorkspaceRequest, initialNiriState } from "../src/niri/state"
 
 const workspacesChanged = JSON.stringify({
   WorkspacesChanged: {
@@ -62,7 +57,6 @@ describe("Niri event replay", () => {
     expect(afterWindows.outcome).toBe("applied")
     expect(afterWindows.state.focusedWorkspaceId).toBe(7)
     expect(afterWindows.state.focusedWindowId).toBe(42)
-    expect(windowsForWorkspace(afterWindows.state, 7).map((window) => window.id)).toEqual([42])
   })
 
   test("retains the last good snapshot for malformed known events", () => {

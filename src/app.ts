@@ -7,9 +7,8 @@ import style from "virtual:vanilla-bundle-url"
 
 import { startDebugControl } from "./debug/control"
 import { diagnosticLog } from "./debug/log"
-import { windowsForWorkspace } from "./niri/state"
 import { createBarServices } from "./services/barServices"
-import Bar, { BarHandle } from "./widget/Bar"
+import { BarInstance, createBar } from "./widget/Bar"
 import { WindowRegistry } from "./windowRegistry"
 
 const BAR_ORIENTATION = "vertical"
@@ -19,10 +18,10 @@ const app = new Gtk.Application({
 })
 const services = createBarServices()
 const monitorByConnector = new Map<string, Gdk.Monitor>()
-const registry = new WindowRegistry<BarHandle>((connector) => {
+const registry = new WindowRegistry<BarInstance>((connector) => {
   const monitor = monitorByConnector.get(connector)
   if (!monitor) throw new Error(`Monitor disappeared during reconciliation: ${connector}`)
-  return Bar(monitor, app, BAR_ORIENTATION, services)
+  return createBar({ monitor, application: app, orientation: BAR_ORIENTATION, services })
 })
 
 let activationCount = 0
@@ -100,14 +99,14 @@ const debugControl = startDebugControl({
       },
       outputs: registry.connectors().map((connector) => {
         const handle = registry.get(connector)
-        const popup = handle?.popupSnapshot()
+        const bar = handle?.snapshot()
         return {
           connector,
-          barVisible: handle?.win.visible ?? false,
-          popupVisible: handle?.popup.visible ?? false,
-          popupWorkspaceId: popup?.workspaceId ?? null,
-          hideScheduled: popup?.hideScheduled ?? false,
-          lastPointerEvent: handle?.lastPointerEvent() ?? null,
+          barVisible: bar?.barVisible ?? false,
+          popupVisible: bar?.popupVisible ?? false,
+          popupWorkspaceId: bar?.popupWorkspaceId ?? null,
+          hideScheduled: bar?.hideScheduled ?? false,
+          lastPointerEvent: bar?.lastPointerEvent ?? null,
         }
       }),
     })
@@ -116,33 +115,30 @@ const debugControl = startDebugControl({
     const handle = registry.get(output)
     if (!handle) return JSON.stringify({ ok: false, error: "unknown-output" })
     activeDebugConnector = output
-    handle.popupController.workspaceEnter(
-      workspaceId,
-      windowsForWorkspace(services.niri.state.peek(), workspaceId).length,
-    )
+    handle.dispatch({ type: "workspace-enter", workspaceId, origin: "debug" })
     return ok()
   },
   workspaceLeave: () => {
     const handle = activeDebugConnector ? registry.get(activeDebugConnector) : undefined
     if (!handle) return noActiveBar()
-    handle.popupController.workspaceLeave()
+    handle.dispatch({ type: "workspace-leave", origin: "debug" })
     return ok()
   },
   popupEnter: () => {
     const handle = activeDebugConnector ? registry.get(activeDebugConnector) : undefined
     if (!handle) return noActiveBar()
-    handle.popupController.popupEnter()
+    handle.dispatch({ type: "popup-enter", origin: "debug" })
     return ok()
   },
   popupLeave: () => {
     const handle = activeDebugConnector ? registry.get(activeDebugConnector) : undefined
     if (!handle) return noActiveBar()
-    handle.popupController.popupLeave()
+    handle.dispatch({ type: "popup-leave", origin: "debug" })
     return ok()
   },
   reset: () => {
     for (const connector of registry.connectors()) {
-      registry.get(connector)?.popupController.reset()
+      registry.get(connector)?.dispatch({ type: "reset", origin: "debug" })
     }
     activeDebugConnector = null
     return ok()

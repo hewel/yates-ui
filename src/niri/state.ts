@@ -218,19 +218,6 @@ const knownEventNames = new Set([
   "WindowFocusChanged",
 ])
 
-export function windowsForWorkspace(
-  state: NiriState,
-  workspaceId: number,
-): ReadonlyArray<NiriWindow> {
-  return state.windows
-    .filter((window) => window.workspace_id === workspaceId)
-    .toSorted(
-      (left, right) =>
-        (left.layout?.tile_pos_in_workspace_view?.[0] ?? 0) -
-        (right.layout?.tile_pos_in_workspace_view?.[0] ?? 0),
-    )
-}
-
 export function focusWorkspaceRequest(workspaceId: number): string {
   return JSON.stringify({
     Action: { FocusWorkspace: { reference: { Id: workspaceId } } },

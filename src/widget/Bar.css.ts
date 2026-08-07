@@ -46,6 +46,11 @@ export const workspacePopup = style({
   color: "#ffffff",
 })
 
+export const popupWindow = style({
+  backgroundColor: "transparent",
+  boxShadow: "none",
+})
+
 export const windowTitle = style({
   fontWeight: "500",
   fontSize: "0.8rem",
