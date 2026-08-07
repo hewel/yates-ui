@@ -7,7 +7,7 @@ import { vanillaCssUrl } from "./plugins/vanillaCssUrl"
 
 export default defineConfig({
   platform: "neutral",
-  input: "src/app.ts",
+  input: "src/runtime.ts",
   watch: {
     include: ["src/**/*"],
     exclude: ["node_modules/**", "dist/**"],
@@ -17,13 +17,7 @@ export default defineConfig({
     cleanDir: true,
     format: "esm",
   },
-  external: [
-    /^gi:\/\//,
-    /^resource:\/\//,
-    "system",
-    "gettext",
-    "console",
-  ],
+  external: [/^gi:\/\//, /^resource:\/\//, "system", "gettext", "console"],
   plugins: [
     esbuild({
       target: "es2022",

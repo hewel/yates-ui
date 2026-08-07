@@ -10,6 +10,9 @@ Application startup and GTK application ownership live in `src/app.ts`. Place re
 - `ags types -u -d ./` regenerates local GObject Introspection declarations.
 - `bun run start` watches `src/`, rebuilds, and restarts the bundled GJS application.
 - `bun run build` creates the production bundle in `dist/`.
+- `bun test` runs the deterministic Niri replay, popup, registry, and input-protocol tests.
+- `bun run acceptance:nested` runs the isolated D-Bus + nested Niri acceptance lane.
+- `bun run acceptance:live` runs the pointer-driven live smoke lane; preflight aborts on DMS or competing layers.
 - `bunx oxfmt --check .` checks formatting without rewriting files.
 - `bunx oxlint .` runs TypeScript and JavaScript lint checks.
 
@@ -19,7 +22,7 @@ Use strict TypeScript, Gnim GTK4 JSX, two-space indentation, and no semicolons. 
 
 ## Testing Guidelines
 
-No automated test runner is configured yet. Before submitting changes, run formatting, linting, and `bun run build`. For window, monitor, Astal service, or CSS changes, also launch under Niri/Wayland and verify the visible bar behavior. If adding tests, use colocated `*.test.ts` or `*.test.tsx` files and add the corresponding Bun script in the same change.
+Use Bun tests in `tests/` and name files `*.test.ts`. Before submitting changes, run `bun test`, formatting, linting, and `bun run build`. Window, monitor, popup, or layer-shell changes also require `bun run acceptance:nested`. Run the live lane only in a clean session; it intentionally refuses to alter DMS, DPMS, or competing bars.
 
 ## Commit & Pull Request Guidelines
 
@@ -28,3 +31,5 @@ Follow the repository's Conventional Commit history: `feat(bar): ...`, `fix(buil
 ## Agent-Specific Instructions
 
 Consult `.agents/skills/ags/` for AGS/Gnim work and `.agents/skills/gtk-vanilla-extract/` for GTK styling. Preserve unrelated local edits and prefer focused validation over broad rewrites.
+
+For runtime diagnostics, use structured `printerr` JSONL; GJS stdout may buffer. Read workspaces/windows through the decoded Niri JSON event stream in `src/niri/`, never through unreliable GI array accessors. Use the test-only D-Bus control surface and artifacts under `/tmp/yates-ui-acceptance/` to distinguish app, environment, and harness failures.

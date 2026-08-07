@@ -3,7 +3,12 @@
   "private": true,
   "scripts": {
     "start": "rolldown -w -c",
-    "build": "rolldown -c"
+    "build": "rolldown -c",
+    "test": "bun test",
+    "acceptance:nested": "bun scripts/acceptance/run.ts",
+    "acceptance:live": "bun scripts/live-acceptance/run.ts",
+    "format:check": "oxfmt --check .",
+    "lint": "oxlint src tests plugins scripts"
   },
   "dependencies": {
     "@girs/gjs": "^4.1.0",

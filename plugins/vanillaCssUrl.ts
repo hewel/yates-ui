@@ -27,10 +27,7 @@ export function vanillaCssUrl({ fileName }: { fileName: string }): Plugin {
       const replacement = cssAsset ? `"${cssAsset.fileName}"` : `""`
       for (const chunk of Object.values(bundle)) {
         if (chunk.type === "chunk") {
-          chunk.code = chunk.code.replace(
-            /"__VANILLA_BUNDLE_URL_PLACEHOLDER__"/g,
-            replacement,
-          )
+          chunk.code = chunk.code.replace(/"__VANILLA_BUNDLE_URL_PLACEHOLDER__"/g, replacement)
         }
       }
     },

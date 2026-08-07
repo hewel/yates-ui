@@ -1,20 +1,17 @@
-import GLib from "gi://GLib"
-import Gio from "gi://Gio"
-import Gtk from "gi://Gtk?version=4.0"
+import Apps from "gi://AstalApps"
+import Battery from "gi://AstalBattery"
+import Network from "gi://AstalNetwork"
+import Tray from "gi://AstalTray"
+import Wp from "gi://AstalWp"
 import Gdk from "gi://Gdk?version=4.0"
+import Gio from "gi://Gio"
+import GLib from "gi://GLib"
+import Gtk from "gi://Gtk?version=4.0"
 import Gtk4LayerShell from "gi://Gtk4LayerShell?version=1.0"
 import Pango from "gi://Pango"
 
-import Niri from "gi://AstalNiri"
-import Tray from "gi://AstalTray"
-import Network from "gi://AstalNetwork"
-import Battery from "gi://AstalBattery"
-import Wp from "gi://AstalWp"
-import Apps from "gi://AstalApps"
-
 import { format } from "date-fns"
 import {
-  Accessor,
   For,
   With,
   createBinding,
@@ -24,6 +21,9 @@ import {
   createState,
 } from "gnim"
 
+import { diagnosticLog } from "../debug/log"
+import { NiriWindow, NiriWorkspace, windowsForWorkspace } from "../niri/state"
+import { BarServices } from "../services/barServices"
 import {
   bar,
   barVertical,
@@ -35,23 +35,7 @@ import {
   workspacePopup,
   workspaces,
 } from "./Bar.css"
-
-function createPoll<T>(initial: T, interval: number, fn: () => T): Accessor<T> {
-  const [value, setValue] = createState(initial)
-  const update = () => setValue(fn())
-  update()
-  GLib.timeout_add(GLib.PRIORITY_DEFAULT, interval, () => {
-    update()
-    return GLib.SOURCE_CONTINUE
-  })
-  return value
-}
-
-const niri = Niri.get_default()
-
-const clockLabel = createPoll("", 1000, () => format(new Date(), "EEE MMM d  HH:mm"))
-const hourLabel = createPoll("", 1000, () => format(new Date(), "HH"))
-const minuteLabel = createPoll("", 1000, () => format(new Date(), "mm"))
+import { PopupController, PopupSnapshot } from "./popupController"
 
 const apps = new Apps.Apps()
 
@@ -76,35 +60,41 @@ function gtkOrientation(o: Orientation): Gtk.Orientation {
   return o === "vertical" ? Gtk.Orientation.VERTICAL : Gtk.Orientation.HORIZONTAL
 }
 
+function requireGtkWindow(value: unknown): Gtk.Window {
+  if (value instanceof Gtk.Window) return value
+  throw new Error("Gnim root did not construct a Gtk.Window")
+}
+
 function Workspaces({
   gdkmonitor,
   orientation,
+  services,
   onHover,
   onLeave,
 }: {
   gdkmonitor: Gdk.Monitor
   orientation: Orientation
-  onHover: (ws: Niri.Workspace, btn: Gtk.Button) => void
+  services: BarServices
+  onHover: (ws: NiriWorkspace, btn: Gtk.Button) => void
   onLeave: () => void
 }) {
-  const workspaces_ = createBinding(niri, "workspaces")
-  const focused = createBinding(niri, "focusedWorkspace")
+  const state = services.niri.state
   const mine = createComputed(() =>
-    workspaces_().filter((ws) => ws.output === gdkmonitor.connector),
+    state().workspaces.filter((ws) => ws.output === gdkmonitor.connector),
   )
 
   return (
     <Gtk.Box class={workspaces} orientation={gtkOrientation(orientation)} spacing={8}>
       <For each={mine}>
-        {(ws: Niri.Workspace) => (
+        {(ws: NiriWorkspace) => (
           <Gtk.Button
             canFocus={false}
             class={createComputed(() =>
-              focused()?.id === ws.id
+              state().focusedWorkspaceId === ws.id
                 ? `${workspaceButton} ${workspaceButtonActive}`
                 : workspaceButton,
             )}
-            onClicked={() => ws.focus()}
+            onClicked={() => services.niri.focusWorkspace(ws.id)}
             $={(self: Gtk.Button) => {
               const motion = new Gtk.EventControllerMotion()
               motion.connect("enter", () => onHover(ws, self))
@@ -120,9 +110,11 @@ function Workspaces({
   )
 }
 
-function WindowTitle() {
-  const focused = createBinding(niri, "focusedWindow")
-  const title = createComputed(() => focused()?.title ?? "")
+function WindowTitle({ services }: { services: BarServices }) {
+  const title = createComputed(() => {
+    const state = services.niri.state()
+    return state.windows.find((window) => window.id === state.focusedWindowId)?.title ?? ""
+  })
 
   return (
     <Gtk.Label
@@ -158,9 +150,7 @@ function NetworkIcon() {
   const network = Network.get_default()
   const wifiIcon = createBinding(network, "wifi", "iconName")
   const wiredIcon = createBinding(network, "wired", "iconName")
-  const icon = createComputed(
-    () => wifiIcon() ?? wiredIcon() ?? "network-offline-symbolic",
-  )
+  const icon = createComputed(() => wifiIcon() ?? wiredIcon() ?? "network-offline-symbolic")
 
   return <Gtk.Image iconName={icon} pixelSize={16} />
 }
@@ -191,73 +181,84 @@ export default function Bar(
   gdkmonitor: Gdk.Monitor,
   application: Gtk.Application,
   orientation: Orientation,
+  services: BarServices,
 ) {
   const vertical = orientation === "vertical"
-  const [popupWs, setPopupWs] = createState<Niri.Workspace | null>(null)
+  const [popupSnapshot, setPopupSnapshot] = createState<PopupSnapshot>({
+    workspaceId: null,
+    hideScheduled: false,
+  })
+  const [lastPointerEvent, setLastPointerEvent] = createState<
+    | { readonly type: "workspace-enter"; readonly workspaceId: number }
+    | { readonly type: "workspace-leave" | "popup-enter" | "popup-leave" }
+    | null
+  >(null)
+  const popupController = new PopupController(
+    {
+      schedule: (callback, delayMs) =>
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, delayMs, () => {
+          callback()
+          return GLib.SOURCE_REMOVE
+        }),
+      cancel: (id) => GLib.source_remove(id),
+    },
+    setPopupSnapshot,
+  )
 
-  let hideSource = 0
-  const cancelHide = () => {
-    if (hideSource) {
-      GLib.source_remove(hideSource)
-      hideSource = 0
-    }
-  }
-  const scheduleHide = () => {
-    cancelHide()
-    hideSource = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 200, () => {
-      hideSource = 0
-      setPopupWs(null)
-      return GLib.SOURCE_REMOVE
-    })
-  }
+  let disposePopupRoot = () => {}
+  let disposeBarRoot = () => {}
 
-  const popup = createRoot(() => (
-    <Gtk.Window
-      application={application}
-      name="workspace-popup"
-      visible={createComputed(() => popupWs() !== null)}
-      $={(self: Gtk.Window) => {
-        const motion = new Gtk.EventControllerMotion()
-        motion.connect("enter", cancelHide)
-        motion.connect("leave", scheduleHide)
-        self.add_controller(motion)
-      }}
-    >
-      <Gtk.Box class={workspacePopup}>
-        <With value={popupWs}>
-          {(ws: Niri.Workspace | null) => {
-            if (!ws) return ""
-            const wins = createBinding(niri, "windows")
-            const sorted = createComputed(() =>
-              wins()
-                .filter((w) => w.workspaceId === ws.id)
-                .sort(
-                  (a, b) =>
-                    (a.layout?.tile_pos_in_workspace_view?.[0] ?? 0) -
-                    (b.layout?.tile_pos_in_workspace_view?.[0] ?? 0),
-                ),
-            )
-            createEffect(() => {
-              if (sorted().length === 0) setPopupWs(null)
+  const popup = requireGtkWindow(
+    createRoot((dispose) => {
+      disposePopupRoot = dispose
+      return (
+        <Gtk.Window
+          application={application}
+          name="workspace-popup"
+          visible={createComputed(() => popupSnapshot().workspaceId !== null)}
+          $={(self: Gtk.Window) => {
+            const motion = new Gtk.EventControllerMotion()
+            motion.connect("enter", () => {
+              setLastPointerEvent({ type: "popup-enter" })
+              popupController.popupEnter()
             })
-            return (
-              <Gtk.Box spacing={10}>
-                <For each={sorted}>
-                  {(w: Niri.Window) => (
-                    <Gtk.Image
-                      {...iconForAppId(w.appId)}
-                      pixelSize={24}
-                      tooltipText={w.title ?? undefined}
-                    />
-                  )}
-                </For>
-              </Gtk.Box>
-            )
+            motion.connect("leave", () => {
+              setLastPointerEvent({ type: "popup-leave" })
+              popupController.popupLeave()
+            })
+            self.add_controller(motion)
           }}
-        </With>
-      </Gtk.Box>
-    </Gtk.Window>
-  )) as Gtk.Window
+        >
+          <Gtk.Box class={workspacePopup}>
+            <With value={popupSnapshot}>
+              {(snapshot: PopupSnapshot) => {
+                if (snapshot.workspaceId === null) return ""
+                const sorted = createComputed(() =>
+                  windowsForWorkspace(services.niri.state(), snapshot.workspaceId ?? -1),
+                )
+                createEffect(() => {
+                  if (sorted().length === 0) popupController.reset()
+                })
+                return (
+                  <Gtk.Box spacing={10}>
+                    <For each={sorted}>
+                      {(w: NiriWindow) => (
+                        <Gtk.Image
+                          {...iconForAppId(w.app_id)}
+                          pixelSize={24}
+                          tooltipText={w.title ?? undefined}
+                        />
+                      )}
+                    </For>
+                  </Gtk.Box>
+                )
+              }}
+            </With>
+          </Gtk.Box>
+        </Gtk.Window>
+      )
+    }),
+  )
 
   Gtk4LayerShell.init_for_window(popup)
   Gtk4LayerShell.set_layer(popup, Gtk4LayerShell.Layer.OVERLAY)
@@ -266,14 +267,11 @@ export default function Bar(
   Gtk4LayerShell.set_anchor(popup, Gtk4LayerShell.Edge.TOP, true)
   Gtk4LayerShell.set_monitor(popup, gdkmonitor)
 
-  const showPopup = (ws: Niri.Workspace, btn: Gtk.Button) => {
-    cancelHide()
-    // Workspace.windows is unreliable in gjs (null / unconvertible GIR array);
-    // derive from the Niri-level list instead. Note: use get_windows() —
-    // the JS property accessor fails GI conversion for array properties.
-    const count = niri.get_windows().filter((w) => w.workspaceId === ws.id).length
+  const showPopup = (ws: NiriWorkspace, btn: Gtk.Button) => {
+    setLastPointerEvent({ type: "workspace-enter", workspaceId: ws.id })
+    const count = windowsForWorkspace(services.niri.state(), ws.id).length
     if (count === 0) {
-      setPopupWs(null)
+      popupController.workspaceEnter(ws.id, 0)
       return
     }
     const [, bounds] = btn.compute_bounds(win)
@@ -292,42 +290,56 @@ export default function Bar(
         Math.max(0, Math.round(bounds.get_x())),
       )
     }
-    setPopupWs(ws)
+    popupController.workspaceEnter(ws.id, count)
+  }
+  const workspaceLeave = () => {
+    setLastPointerEvent({ type: "workspace-leave" })
+    popupController.workspaceLeave()
   }
 
-  const win = createRoot(() => (
-    <Gtk.Window application={application} name="bar">
-      <Gtk.CenterBox
-        class={vertical ? barVertical : bar}
-        orientation={vertical ? Gtk.Orientation.VERTICAL : Gtk.Orientation.HORIZONTAL}
-      >
-        <Gtk.Box $type="start" spacing={10} orientation={gtkOrientation(orientation)}>
-          <Workspaces
-            gdkmonitor={gdkmonitor}
-            orientation={orientation}
-            onHover={showPopup}
-            onLeave={scheduleHide}
-          />
-          {!vertical && <WindowTitle />}
-        </Gtk.Box>
-        {vertical ? (
-          <Gtk.Box $type="center" orientation={Gtk.Orientation.VERTICAL} class={clock}>
-            <Gtk.Label label={hourLabel} />
-            <Gtk.Label label={minuteLabel} />
-          </Gtk.Box>
-        ) : (
-          <Gtk.Label $type="center" class={clock} label={clockLabel} />
-        )}
-        <Gtk.Box $type="end" spacing={8} orientation={gtkOrientation(orientation)}>
-          <SysTray orientation={orientation} />
-          <NetworkIcon />
-          <VolumeIcon />
-          <BatteryStatus orientation={orientation} />
-          <Gtk.Image iconName="system-shutdown-symbolic" pixelSize={16} />
-        </Gtk.Box>
-      </Gtk.CenterBox>
-    </Gtk.Window>
-  )) as Gtk.Window
+  const win = requireGtkWindow(
+    createRoot((dispose) => {
+      disposeBarRoot = dispose
+      return (
+        <Gtk.Window application={application} name="bar">
+          <Gtk.CenterBox
+            class={vertical ? barVertical : bar}
+            orientation={vertical ? Gtk.Orientation.VERTICAL : Gtk.Orientation.HORIZONTAL}
+          >
+            <Gtk.Box $type="start" spacing={10} orientation={gtkOrientation(orientation)}>
+              <Workspaces
+                gdkmonitor={gdkmonitor}
+                orientation={orientation}
+                services={services}
+                onHover={showPopup}
+                onLeave={workspaceLeave}
+              />
+              {!vertical && <WindowTitle services={services} />}
+            </Gtk.Box>
+            {vertical ? (
+              <Gtk.Box $type="center" orientation={Gtk.Orientation.VERTICAL} class={clock}>
+                <Gtk.Label label={services.now.as((now) => format(now, "HH"))} />
+                <Gtk.Label label={services.now.as((now) => format(now, "mm"))} />
+              </Gtk.Box>
+            ) : (
+              <Gtk.Label
+                $type="center"
+                class={clock}
+                label={services.now.as((now) => format(now, "EEE MMM d  HH:mm"))}
+              />
+            )}
+            <Gtk.Box $type="end" spacing={8} orientation={gtkOrientation(orientation)}>
+              {services.systemIndicators && <SysTray orientation={orientation} />}
+              {services.systemIndicators && <NetworkIcon />}
+              {services.systemIndicators && <VolumeIcon />}
+              {services.systemIndicators && <BatteryStatus orientation={orientation} />}
+              <Gtk.Image iconName="system-shutdown-symbolic" pixelSize={16} />
+            </Gtk.Box>
+          </Gtk.CenterBox>
+        </Gtk.Window>
+      )
+    }),
+  )
 
   Gtk4LayerShell.init_for_window(win)
   Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
@@ -343,5 +355,23 @@ export default function Bar(
   Gtk4LayerShell.set_monitor(win, gdkmonitor)
 
   win.present()
-  return win
+  diagnosticLog("bar.created", { connector: gdkmonitor.connector ?? "unknown" })
+  return {
+    connector: gdkmonitor.connector ?? "unknown",
+    win,
+    popup,
+    popupController,
+    popupSnapshot: () => popupSnapshot(),
+    lastPointerEvent: () => lastPointerEvent(),
+    destroy: () => {
+      popupController.reset()
+      popup.destroy()
+      win.destroy()
+      disposePopupRoot()
+      disposeBarRoot()
+      diagnosticLog("bar.destroyed", { connector: gdkmonitor.connector ?? "unknown" })
+    },
+  }
 }
+
+export type BarHandle = ReturnType<typeof Bar>

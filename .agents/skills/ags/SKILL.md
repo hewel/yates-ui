@@ -54,3 +54,12 @@ Build against the repository's installed AGS, Gnim, GTK, and generated GI types.
 1. Run the narrowest formatter, linter, typecheck, or build command available for the touched files.
 2. Check startup/runtime behavior when the change affects window construction, monitor selection, signals, or lifecycle.
 3. Confirm subscriptions and external producers are disposed when their owning scope or widget is removed.
+
+## Debug Wayland and GJS deterministically
+
+- Send structured diagnostic JSON to `printerr`; do not rely on buffered GJS stdout for timing-sensitive evidence.
+- Establish three independent observations when debugging layer-shell UI: application state/control over test-only D-Bus, compositor state from Niri JSON IPC, and pixels from `grim -c`.
+- Treat GIR array declarations as untrusted runtime boundaries. Prefer decoded Niri event-stream state when a property accessor throws, returns null, or marshals inconsistently.
+- Keep synthetic input devices persistent for the entire scenario. Require heartbeat and sequence acknowledgements; a lost device is a harness failure, not an application failure.
+- Detect idle overlays, exclusive zones, and competing bars before live tests. Never stop or reconfigure them without user authorization; use nested Niri for the deterministic default lane.
+- Assert one application-owned layer surface per output after repeated activation and watch rebuilds. Capture stderr, layer JSON, D-Bus snapshots, input acknowledgements, screenshot metadata, and cleanup status under a run-specific artifact directory.
