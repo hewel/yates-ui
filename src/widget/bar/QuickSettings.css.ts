@@ -1,7 +1,18 @@
-import { style } from "@vanilla-extract/css"
+import { globalStyle, style } from "@vanilla-extract/css"
+
+const shellBackground = "#282828"
+const controlBackground = "#404040"
+const arrowBackground = "#4f4f4f"
+const controlHover = "#4b4b4b"
+const controlPressed = "#565656"
+const activeBackground = "#3584e4"
+const activeArrowBackground = "#458ee6"
+const activeHover = "#4990e7"
+const foreground = "#ffffff"
+const dimForeground = "#d0d0d0"
 
 const focus = {
-  outline: "2px solid @accent_color",
+  outline: "2px solid #78aeed",
   outlineOffset: "2px",
 }
 
@@ -17,108 +28,196 @@ export const quickSettingsTrigger = style({
   ":focus-visible": focus,
 })
 
-export const quickSettingsPanel = style({
-  minWidth: "384px",
-  padding: "16px",
-  color: "@theme_fg_color",
+export const quickSettingsPopover = style({
+  backgroundColor: "transparent",
+  boxShadow: "none",
 })
 
-export const quickSettingsMain = style({ minWidth: "352px" })
+globalStyle(`${quickSettingsPopover} contents`, {
+  padding: "0",
+  border: "none",
+  borderRadius: "28px",
+  backgroundColor: "transparent",
+  boxShadow: "none",
+})
 
-export const quickSettingsDetails = style({ minWidth: "352px" })
+export const quickSettingsPanel = style({
+  minWidth: "376px",
+  padding: "16px",
+  borderRadius: "28px",
+  backgroundColor: shellBackground,
+  boxShadow: "0 4px 18px rgba(0, 0, 0, 0.35)",
+  color: foreground,
+})
 
-export const quickSettingsHeader = style({ minHeight: "40px" })
+export const quickSettingsMain = style({ minWidth: "376px" })
+
+export const quickSettingsDetails = style({ minWidth: "376px" })
+
+export const quickSettingsTopRow = style({ minHeight: "40px" })
+
+export const quickSettingsActionGroup = style({ minHeight: "40px" })
+
+export const quickSettingsHeader = style({ minHeight: "48px" })
 
 export const quickSettingsTitle = style({
-  fontSize: "16px",
+  color: foreground,
+  fontSize: "20px",
   fontWeight: "700",
 })
 
+export const quickSettingsHeaderIcon = style({
+  minWidth: "48px",
+  minHeight: "48px",
+  borderRadius: "24px",
+  backgroundColor: controlPressed,
+  color: foreground,
+  selectors: {
+    "&.active": { backgroundColor: activeBackground },
+  },
+})
+
 export const quickSettingsSubtitle = style({
-  color: "@insensitive_fg_color",
-  fontSize: "12px",
+  color: dimForeground,
+  fontSize: "11px",
 })
 
 export const quickSettingsBattery = style({
-  minHeight: "32px",
-  padding: "4px 9px",
-  borderRadius: "16px",
-  backgroundColor: "alpha(@theme_fg_color, 0.08)",
+  minHeight: "40px",
+  padding: "0 14px",
+  borderRadius: "20px",
+  backgroundColor: controlBackground,
+  color: foreground,
+})
+
+export const quickSettingsBatteryValue = style({
+  fontVariantNumeric: "tabular-nums",
+  fontWeight: "700",
 })
 
 export const quickSettingsAction = style({
   minWidth: "40px",
   minHeight: "40px",
-  padding: "8px",
+  padding: "0",
   borderRadius: "20px",
-  backgroundColor: "alpha(@theme_fg_color, 0.1)",
-  ":hover": { backgroundColor: "alpha(@theme_fg_color, 0.18)" },
+  backgroundColor: controlBackground,
+  color: foreground,
+  ":hover": { backgroundColor: controlHover },
+  ":active": { backgroundColor: controlPressed },
   ":focus-visible": focus,
 })
 
 export const quickSettingsSlider = style({
   minHeight: "40px",
+  color: activeBackground,
   ":focus-visible": focus,
 })
 
-export const quickSettingsTileGrid = style({ minWidth: "352px" })
+globalStyle(`${quickSettingsSlider} trough`, {
+  minHeight: "4px",
+  borderRadius: "2px",
+  backgroundColor: "#777777",
+})
+
+globalStyle(`${quickSettingsSlider} highlight`, {
+  minHeight: "4px",
+  borderRadius: "2px",
+  backgroundColor: activeBackground,
+})
+
+globalStyle(`${quickSettingsSlider} slider`, {
+  minWidth: "16px",
+  minHeight: "16px",
+  borderRadius: "8px",
+  backgroundColor: "#c2c2c2",
+  boxShadow: "none",
+})
+
+export const quickSettingsTileGrid = style({ minWidth: "376px" })
+
+export const quickSettingsTileSlot = style({ minWidth: "0" })
 
 export const quickSettingsTilePrimary = style({
   minWidth: "0",
-  minHeight: "92px",
-  padding: "12px",
-  borderRadius: "14px",
-  backgroundColor: "alpha(@theme_fg_color, 0.1)",
-  ":hover": { backgroundColor: "alpha(@theme_fg_color, 0.16)" },
+  minHeight: "48px",
+  padding: "0 12px",
+  borderRadius: "24px",
+  backgroundColor: controlBackground,
+  color: foreground,
+  ":hover": { backgroundColor: controlHover },
+  ":active": { backgroundColor: controlPressed },
   ":checked": {
-    backgroundColor: "@accent_bg_color",
-    color: "@accent_fg_color",
+    backgroundColor: activeBackground,
+    color: foreground,
+  },
+  selectors: {
+    "&:checked:hover": {
+      backgroundColor: activeHover,
+    },
   },
   ":focus-visible": focus,
 })
 
 export const quickSettingsSplitTile = style({
   minWidth: "0",
-  minHeight: "92px",
-  borderRadius: "14px",
-  backgroundColor: "alpha(@theme_fg_color, 0.1)",
+  minHeight: "48px",
+  borderRadius: "24px",
+  backgroundColor: controlBackground,
 })
 
 export const quickSettingsSplitTilePrimary = style({
   minWidth: "0",
-  minHeight: "92px",
-  padding: "12px",
-  borderRadius: "14px 0 0 14px",
+  minHeight: "48px",
+  padding: "0 10px",
+  borderRadius: "24px 0 0 24px",
   backgroundColor: "transparent",
-  ":hover": { backgroundColor: "alpha(@theme_fg_color, 0.08)" },
+  color: foreground,
+  ":hover": { backgroundColor: controlHover },
   ":checked": {
-    backgroundColor: "@accent_bg_color",
-    color: "@accent_fg_color",
+    backgroundColor: activeBackground,
+    color: foreground,
+  },
+  selectors: {
+    "&:checked:hover": {
+      backgroundColor: activeHover,
+    },
   },
   ":focus-visible": focus,
 })
 
 export const quickSettingsSplitTileArrow = style({
-  minWidth: "40px",
-  minHeight: "92px",
-  padding: "8px",
-  borderRadius: "0 14px 14px 0",
-  borderLeft: "1px solid alpha(@theme_fg_color, 0.12)",
-  backgroundColor: "transparent",
-  ":hover": { backgroundColor: "alpha(@theme_fg_color, 0.12)" },
+  minWidth: "36px",
+  minHeight: "48px",
+  padding: "0",
+  borderRadius: "0 24px 24px 0",
+  backgroundColor: arrowBackground,
+  color: foreground,
+  ":hover": { backgroundColor: controlHover },
+  ":active": { backgroundColor: controlPressed },
+  selectors: {
+    "&.active": { backgroundColor: activeArrowBackground },
+    "&.active:hover": { backgroundColor: activeHover },
+  },
   ":focus-visible": focus,
 })
 
-export const quickSettingsTileIcon = style({ marginBottom: "1px" })
+export const quickSettingsTileIcon = style({ minWidth: "18px" })
 
-export const quickSettingsTileLabel = style({ fontWeight: "700" })
+export const quickSettingsTileText = style({ minWidth: "0" })
+
+export const quickSettingsTileLabel = style({
+  color: foreground,
+  fontSize: "14px",
+  fontWeight: "700",
+})
 
 export const quickSettingsBackButton = style({
   minWidth: "40px",
   minHeight: "40px",
-  padding: "8px",
+  padding: "0",
   borderRadius: "20px",
-  ":hover": { backgroundColor: "alpha(@theme_fg_color, 0.1)" },
+  color: foreground,
+  ":hover": { backgroundColor: controlHover },
   ":focus-visible": focus,
 })
 
@@ -128,14 +227,15 @@ export const quickSettingsList = style({
 })
 
 export const quickSettingsDetailRow = style({
-  minHeight: "52px",
-  padding: "8px 10px",
-  borderRadius: "10px",
+  minHeight: "40px",
+  padding: "2px 8px",
+  borderRadius: "12px",
   backgroundColor: "transparent",
-  ":hover": { backgroundColor: "alpha(@theme_fg_color, 0.1)" },
+  color: foreground,
+  ":hover": { backgroundColor: controlBackground },
   selectors: {
     "&.active": {
-      backgroundColor: "alpha(@accent_bg_color, 0.22)",
+      backgroundColor: "transparent",
     },
   },
   ":focus-visible": focus,
@@ -143,18 +243,32 @@ export const quickSettingsDetailRow = style({
 
 export const quickSettingsIcon = style({ minWidth: "20px" })
 
+export const quickSettingsEmptyState = style({
+  minHeight: "96px",
+  padding: "16px 28px",
+  color: dimForeground,
+  fontSize: "15px",
+  fontWeight: "700",
+})
+
 export const quickSettingsChoice = style({
   minHeight: "44px",
   padding: "8px 12px",
-  borderRadius: "12px",
+  borderRadius: "22px",
+  backgroundColor: controlBackground,
+  color: foreground,
+  ":hover": { backgroundColor: controlHover },
+  ":checked": { backgroundColor: activeBackground },
   ":focus-visible": focus,
 })
 
 export const quickSettingsFooterButton = style({
   minWidth: "40px",
   minHeight: "40px",
-  padding: "8px",
+  padding: "0",
   borderRadius: "20px",
+  color: foreground,
+  ":hover": { backgroundColor: controlHover },
   ":focus-visible": focus,
 })
 

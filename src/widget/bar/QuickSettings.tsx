@@ -12,19 +12,24 @@ import {
 import { BarOrientation } from "../../settings/appSettingsModel"
 import {
   quickSettingsAction,
+  quickSettingsActionGroup,
   quickSettingsBackButton,
   quickSettingsBattery,
+  quickSettingsBatteryValue,
   quickSettingsChoice,
   quickSettingsConfirmation,
   quickSettingsDetailRow,
   quickSettingsDetails,
+  quickSettingsEmptyState,
   quickSettingsError,
   quickSettingsFooterButton,
   quickSettingsHeader,
+  quickSettingsHeaderIcon,
   quickSettingsIcon,
   quickSettingsList,
   quickSettingsMain,
   quickSettingsPanel,
+  quickSettingsPopover,
   quickSettingsSlider,
   quickSettingsSplitTile,
   quickSettingsSplitTileArrow,
@@ -34,7 +39,9 @@ import {
   quickSettingsTileIcon,
   quickSettingsTileLabel,
   quickSettingsTilePrimary,
+  quickSettingsTileText,
   quickSettingsTitle,
+  quickSettingsTopRow,
 } from "./QuickSettings.css"
 
 export type QuickSettingsPage =
@@ -76,7 +83,25 @@ function sessionLabel(action: SessionAction): string {
   }
 }
 
-function DetailHeader({ title, onBack }: { title: string; onBack: () => void }) {
+function DetailHeader({
+  title,
+  iconName,
+  iconActive,
+  onBack,
+  actionIconName,
+  actionTooltip,
+  actionSensitive,
+  onAction,
+}: {
+  title: string
+  iconName: string | Accessor<string>
+  iconActive?: Accessor<boolean>
+  onBack: () => void
+  actionIconName?: string
+  actionTooltip?: string
+  actionSensitive?: Accessor<boolean>
+  onAction?: () => void
+}) {
   return (
     <Gtk.Box class={quickSettingsHeader} orientation={Gtk.Orientation.HORIZONTAL} spacing={8}>
       <Gtk.Button
@@ -88,7 +113,30 @@ function DetailHeader({ title, onBack }: { title: string; onBack: () => void }) 
           self.update_property([Gtk.AccessibleProperty.LABEL], ["Back"])
         }}
       />
+      <Gtk.Box
+        class={
+          iconActive?.as((active) =>
+            active ? `${quickSettingsHeaderIcon} active` : quickSettingsHeaderIcon,
+          ) ?? quickSettingsHeaderIcon
+        }
+        halign={Gtk.Align.CENTER}
+        valign={Gtk.Align.CENTER}
+      >
+        <Gtk.Image iconName={iconName} pixelSize={22} />
+      </Gtk.Box>
       <Gtk.Label class={quickSettingsTitle} label={title} xalign={0} hexpand={true} />
+      {actionIconName && onAction && (
+        <Gtk.Button
+          class={`${quickSettingsBackButton} flat`}
+          iconName={actionIconName}
+          tooltipText={actionTooltip}
+          sensitive={actionSensitive}
+          onClicked={onAction}
+          $={(self: Gtk.Button) => {
+            self.update_property([Gtk.AccessibleProperty.LABEL], [actionTooltip ?? "Page action"])
+          }}
+        />
+      )}
     </Gtk.Box>
   )
 }
@@ -153,7 +201,6 @@ function DetailRow({
 function MainTile({
   iconName,
   label,
-  subtitle,
   active,
   sensitive,
   visible,
@@ -161,7 +208,6 @@ function MainTile({
 }: {
   iconName: Accessor<string>
   label: Accessor<string>
-  subtitle: Accessor<string>
   active: Accessor<boolean>
   sensitive?: Accessor<boolean>
   visible?: Accessor<boolean>
@@ -173,20 +219,21 @@ function MainTile({
       active={active}
       sensitive={sensitive}
       visible={visible}
+      hexpand={true}
       tooltipText={label}
       onToggled={(self) => {
         if (self.active !== active()) onClicked()
       }}
     >
-      <Gtk.Box orientation={Gtk.Orientation.VERTICAL} spacing={5}>
-        <Gtk.Image class={quickSettingsTileIcon} iconName={iconName} pixelSize={20} />
-        <Gtk.Label class={quickSettingsTileLabel} label={label} xalign={0} />
+      <Gtk.Box spacing={10}>
+        <Gtk.Image class={quickSettingsTileIcon} iconName={iconName} pixelSize={18} />
         <Gtk.Label
-          class={quickSettingsSubtitle}
-          label={subtitle}
+          class={quickSettingsTileLabel}
+          label={label}
           xalign={0}
+          hexpand={true}
           ellipsize={Pango.EllipsizeMode.END}
-          maxWidthChars={16}
+          maxWidthChars={14}
         />
       </Gtk.Box>
     </Gtk.ToggleButton>
@@ -213,30 +260,48 @@ function SplitTile({
   onDetails: () => void
 }) {
   return (
-    <Gtk.Box class={quickSettingsSplitTile} spacing={0} visible={visible}>
+    <Gtk.Box class={quickSettingsSplitTile} spacing={0} visible={visible} hexpand={true}>
       <Gtk.ToggleButton
         class={quickSettingsSplitTilePrimary}
         active={active}
         sensitive={sensitive}
+        hexpand={true}
         tooltipText={label}
         onToggled={(self) => {
           if (self.active !== active()) onToggle()
         }}
       >
-        <Gtk.Box orientation={Gtk.Orientation.VERTICAL} spacing={5}>
-          <Gtk.Image class={quickSettingsTileIcon} iconName={iconName} pixelSize={20} />
-          <Gtk.Label class={quickSettingsTileLabel} label={label} xalign={0} />
-          <Gtk.Label
-            class={quickSettingsSubtitle}
-            label={subtitle}
-            xalign={0}
-            ellipsize={Pango.EllipsizeMode.END}
-            maxWidthChars={13}
-          />
+        <Gtk.Box spacing={8}>
+          <Gtk.Image class={quickSettingsTileIcon} iconName={iconName} pixelSize={18} />
+          <Gtk.Box
+            class={quickSettingsTileText}
+            orientation={Gtk.Orientation.VERTICAL}
+            spacing={0}
+            hexpand={true}
+          >
+            <Gtk.Label
+              class={quickSettingsTileLabel}
+              label={label}
+              xalign={0}
+              ellipsize={Pango.EllipsizeMode.END}
+              maxWidthChars={11}
+            />
+            <Gtk.Label
+              class={quickSettingsSubtitle}
+              label={subtitle}
+              xalign={0}
+              ellipsize={Pango.EllipsizeMode.END}
+              maxWidthChars={11}
+            />
+          </Gtk.Box>
         </Gtk.Box>
       </Gtk.ToggleButton>
       <Gtk.Button
-        class={`${quickSettingsSplitTileArrow} flat`}
+        class={active.as((isActive) =>
+          isActive
+            ? `${quickSettingsSplitTileArrow} flat active`
+            : `${quickSettingsSplitTileArrow} flat`,
+        )}
         sensitive={sensitive}
         iconName="go-next-symbolic"
         tooltipText={label.as((value) => `${value} details`)}
@@ -286,6 +351,7 @@ export function QuickSettings(options: QuickSettingsOptions) {
 
   return (
     <Gtk.Popover
+      class={quickSettingsPopover}
       autohide={true}
       hasArrow={false}
       onClosed={() => {
@@ -310,60 +376,71 @@ export function QuickSettings(options: QuickSettingsOptions) {
           spacing={14}
           visible={isPageVisible("main")}
         >
-          <Gtk.Box spacing={8}>
-            <Gtk.Box
-              class={quickSettingsBattery}
-              spacing={5}
-              visible={createComputed(() => state().battery.available)}
-            >
-              <Gtk.Image iconName={createComputed(() => state().battery.iconName)} pixelSize={16} />
-              <Gtk.Label label={createComputed(() => percentage(state().battery.percentage))} />
+          <Gtk.Box class={quickSettingsTopRow} spacing={8}>
+            <Gtk.Box class={quickSettingsActionGroup} spacing={8}>
+              <Gtk.Box
+                class={quickSettingsBattery}
+                spacing={5}
+                visible={createComputed(() => state().battery.available)}
+              >
+                <Gtk.Image
+                  iconName={createComputed(() => state().battery.iconName)}
+                  pixelSize={16}
+                />
+                <Gtk.Label
+                  class={quickSettingsBatteryValue}
+                  label={createComputed(() => percentage(state().battery.percentage))}
+                />
+              </Gtk.Box>
+              <Gtk.Button
+                class={`${quickSettingsAction} flat`}
+                iconName="applets-screenshooter-symbolic"
+                tooltipText="Take screenshot"
+                sensitive={createComputed(() => state().session.screenshot)}
+                onClicked={() => options.quickSettings.dispatch({ type: "take-screenshot" })}
+                $={(self: Gtk.Button) =>
+                  self.update_property([Gtk.AccessibleProperty.LABEL], ["Take screenshot"])
+                }
+              />
+              <Gtk.Button
+                class={`${quickSettingsAction} flat`}
+                iconName="preferences-system-symbolic"
+                tooltipText="Settings"
+                onClicked={() => {
+                  if (popover) closeAndReset(popover)
+                  options.openSettings()
+                }}
+                $={(self: Gtk.Button) =>
+                  self.update_property([Gtk.AccessibleProperty.LABEL], ["Settings"])
+                }
+              />
             </Gtk.Box>
             <Gtk.Box hexpand={true} />
-            <Gtk.Button
-              class={`${quickSettingsAction} flat`}
-              iconName="applets-screenshooter-symbolic"
-              tooltipText="Take screenshot"
-              sensitive={createComputed(() => state().session.screenshot)}
-              onClicked={() => options.quickSettings.dispatch({ type: "take-screenshot" })}
-              $={(self: Gtk.Button) =>
-                self.update_property([Gtk.AccessibleProperty.LABEL], ["Take screenshot"])
-              }
-            />
-            <Gtk.Button
-              class={`${quickSettingsAction} flat`}
-              iconName="preferences-system-symbolic"
-              tooltipText="Settings"
-              onClicked={() => {
-                if (popover) closeAndReset(popover)
-                options.openSettings()
-              }}
-              $={(self: Gtk.Button) =>
-                self.update_property([Gtk.AccessibleProperty.LABEL], ["Settings"])
-              }
-            />
-            <Gtk.Button
-              class={`${quickSettingsAction} flat`}
-              iconName="system-lock-screen-symbolic"
-              tooltipText="Lock screen"
-              sensitive={createComputed(() => state().session.lock)}
-              onClicked={() => options.quickSettings.dispatch({ type: "lock" })}
-              $={(self: Gtk.Button) =>
-                self.update_property([Gtk.AccessibleProperty.LABEL], ["Lock screen"])
-              }
-            />
-            <Gtk.Button
-              class={`${quickSettingsAction} flat`}
-              iconName="system-shutdown-symbolic"
-              tooltipText="Power options"
-              visible={createComputed(
-                () => state().session.suspend || state().session.reboot || state().session.powerOff,
-              )}
-              onClicked={() => navigate("session-confirmation")}
-              $={(self: Gtk.Button) =>
-                self.update_property([Gtk.AccessibleProperty.LABEL], ["Power options"])
-              }
-            />
+            <Gtk.Box class={quickSettingsActionGroup} spacing={8}>
+              <Gtk.Button
+                class={`${quickSettingsAction} flat`}
+                iconName="system-lock-screen-symbolic"
+                tooltipText="Lock screen"
+                sensitive={createComputed(() => state().session.lock)}
+                onClicked={() => options.quickSettings.dispatch({ type: "lock" })}
+                $={(self: Gtk.Button) =>
+                  self.update_property([Gtk.AccessibleProperty.LABEL], ["Lock screen"])
+                }
+              />
+              <Gtk.Button
+                class={`${quickSettingsAction} flat`}
+                iconName="system-shutdown-symbolic"
+                tooltipText="Power options"
+                visible={createComputed(
+                  () =>
+                    state().session.suspend || state().session.reboot || state().session.powerOff,
+                )}
+                onClicked={() => navigate("session-confirmation")}
+                $={(self: Gtk.Button) =>
+                  self.update_property([Gtk.AccessibleProperty.LABEL], ["Power options"])
+                }
+              />
+            </Gtk.Box>
           </Gtk.Box>
 
           <Gtk.Box spacing={10} visible={createComputed(() => state().audio.available)}>
@@ -399,8 +476,18 @@ export function QuickSettings(options: QuickSettingsOptions) {
             />
           </Gtk.Box>
 
-          <Gtk.Box class={quickSettingsTileGrid} orientation={Gtk.Orientation.VERTICAL} spacing={8}>
-            <Gtk.Box spacing={8} homogeneous={true}>
+          <Gtk.FlowBox
+            class={quickSettingsTileGrid}
+            columnSpacing={12}
+            rowSpacing={12}
+            homogeneous={true}
+            minChildrenPerLine={2}
+            maxChildrenPerLine={2}
+            selectionMode={Gtk.SelectionMode.NONE}
+          >
+            <Gtk.FlowBoxChild
+              visible={createComputed(() => state().wired.available || state().wifi.available)}
+            >
               <SplitTile
                 iconName={createComputed(() =>
                   !state().wifi.available && state().wired.connected
@@ -419,10 +506,11 @@ export function QuickSettings(options: QuickSettingsOptions) {
                 })}
                 active={createComputed(() => state().wired.connected || state().wifi.enabled)}
                 sensitive={createComputed(() => state().wifi.available)}
-                visible={createComputed(() => state().wired.available || state().wifi.available)}
                 onToggle={() => options.quickSettings.dispatch({ type: "toggle-wifi" })}
                 onDetails={() => navigate("wifi")}
               />
+            </Gtk.FlowBoxChild>
+            <Gtk.FlowBoxChild visible={createComputed(() => state().bluetooth.available)}>
               <SplitTile
                 iconName={createComputed(() =>
                   state().bluetooth.enabled
@@ -436,12 +524,11 @@ export function QuickSettings(options: QuickSettingsOptions) {
                 })}
                 active={createComputed(() => state().bluetooth.enabled)}
                 sensitive={createComputed(() => state().bluetooth.available)}
-                visible={createComputed(() => state().bluetooth.available)}
                 onToggle={() => options.quickSettings.dispatch({ type: "toggle-bluetooth" })}
                 onDetails={() => navigate("bluetooth")}
               />
-            </Gtk.Box>
-            <Gtk.Box spacing={8} homogeneous={true}>
+            </Gtk.FlowBoxChild>
+            <Gtk.FlowBoxChild visible={createComputed(() => state().powerMode.available)}>
               <SplitTile
                 iconName={createComputed(() => state().powerMode.iconName)}
                 label={createComputed(() => "Power Mode")}
@@ -451,35 +538,22 @@ export function QuickSettings(options: QuickSettingsOptions) {
                       (profile) => profile.id === state().powerMode.activeProfile,
                     )?.label ?? "Balanced",
                 )}
-                active={createComputed(() => state().powerMode.available)}
+                active={createComputed(
+                  () =>
+                    state().powerMode.activeProfile === "performance" ||
+                    state().powerMode.activeProfile === "power-saver",
+                )}
                 sensitive={createComputed(() => state().powerMode.available)}
-                visible={createComputed(() => state().powerMode.available)}
                 onToggle={() => navigate("power-profile")}
                 onDetails={() => navigate("power-profile")}
               />
-              <MainTile
-                iconName={createComputed(() => "weather-clear-night-symbolic")}
-                label={createComputed(() => "Dark Style")}
-                subtitle={createComputed(() => (state().darkMode.enabled ? "On" : "Off"))}
-                active={createComputed(() => state().darkMode.enabled)}
-                sensitive={createComputed(() => state().darkMode.available)}
-                visible={createComputed(() => state().darkMode.available)}
-                onClicked={() =>
-                  options.quickSettings.dispatch({
-                    type: "set-dark-mode",
-                    enabled: !state().darkMode.enabled,
-                  })
-                }
-              />
-            </Gtk.Box>
-            <Gtk.Box spacing={8} homogeneous={true}>
+            </Gtk.FlowBoxChild>
+            <Gtk.FlowBoxChild visible={createComputed(() => state().nightLight.available)}>
               <MainTile
                 iconName={createComputed(() => "night-light-symbolic")}
                 label={createComputed(() => "Night Light")}
-                subtitle={createComputed(() => (state().nightLight.enabled ? "On" : "Off"))}
                 active={createComputed(() => state().nightLight.enabled)}
                 sensitive={createComputed(() => state().nightLight.available)}
-                visible={createComputed(() => state().nightLight.available)}
                 onClicked={() =>
                   options.quickSettings.dispatch({
                     type: "set-night-light",
@@ -487,9 +561,25 @@ export function QuickSettings(options: QuickSettingsOptions) {
                   })
                 }
               />
+            </Gtk.FlowBoxChild>
+            <Gtk.FlowBoxChild visible={createComputed(() => state().darkMode.available)}>
+              <MainTile
+                iconName={createComputed(() => "weather-clear-night-symbolic")}
+                label={createComputed(() => "Dark Style")}
+                active={createComputed(() => state().darkMode.enabled)}
+                sensitive={createComputed(() => state().darkMode.available)}
+                onClicked={() =>
+                  options.quickSettings.dispatch({
+                    type: "set-dark-mode",
+                    enabled: !state().darkMode.enabled,
+                  })
+                }
+              />
+            </Gtk.FlowBoxChild>
+            <Gtk.FlowBoxChild>
               <SplitTile
                 iconName={createComputed(() => "view-dual-symbolic")}
-                label={createComputed(() => "Bar Orientation")}
+                label={createComputed(() => "Orientation")}
                 subtitle={createComputed(() =>
                   options.orientation === "vertical" ? "Vertical" : "Horizontal",
                 )}
@@ -501,8 +591,8 @@ export function QuickSettings(options: QuickSettingsOptions) {
                 }
                 onDetails={() => navigate("orientation")}
               />
-            </Gtk.Box>
-          </Gtk.Box>
+            </Gtk.FlowBoxChild>
+          </Gtk.FlowBox>
 
           <Gtk.Label
             class={quickSettingsError}
@@ -519,33 +609,32 @@ export function QuickSettings(options: QuickSettingsOptions) {
           spacing={12}
           visible={isPageVisible("wifi")}
         >
-          <DetailHeader title="Wi-Fi" onBack={() => navigate("main")} />
-          <Gtk.Box spacing={8}>
-            <Gtk.Switch
-              active={createComputed(() => state().wifi.enabled)}
-              sensitive={createComputed(() => state().wifi.available)}
-              tooltipText="Enable Wi-Fi"
-              onStateSet={() => {
-                options.quickSettings.dispatch({ type: "toggle-wifi" })
-                return true
-              }}
-            />
-            <Gtk.Label
-              label={createComputed(() => (state().wifi.enabled ? "Wi-Fi on" : "Wi-Fi off"))}
-            />
-            <Gtk.Button
-              class={`${quickSettingsFooterButton} flat`}
-              iconName="view-refresh-symbolic"
-              tooltipText="Scan networks"
-              hexpand={true}
-              halign={Gtk.Align.END}
-              onClicked={() => options.quickSettings.dispatch({ type: "scan-wifi" })}
-              $={(self: Gtk.Button) =>
-                self.update_property([Gtk.AccessibleProperty.LABEL], ["Scan networks"])
-              }
-            />
-          </Gtk.Box>
-          <Gtk.ListBox class={quickSettingsList} selectionMode={Gtk.SelectionMode.NONE}>
+          <DetailHeader
+            title="Wi-Fi"
+            iconName={createComputed(() => state().wifi.iconName)}
+            iconActive={createComputed(() => state().wifi.enabled)}
+            actionIconName="view-refresh-symbolic"
+            actionTooltip="Scan networks"
+            actionSensitive={createComputed(() => state().wifi.enabled)}
+            onAction={() => options.quickSettings.dispatch({ type: "scan-wifi" })}
+            onBack={() => navigate("main")}
+          />
+          <Gtk.Label
+            class={quickSettingsEmptyState}
+            label={createComputed(() =>
+              state().wifi.enabled ? "No Wi-Fi networks found" : "Turn on Wi-Fi to view networks",
+            )}
+            wrap={true}
+            justify={Gtk.Justification.CENTER}
+            visible={createComputed(
+              () => !state().wifi.enabled || state().wifi.networks.length === 0,
+            )}
+          />
+          <Gtk.ListBox
+            class={quickSettingsList}
+            selectionMode={Gtk.SelectionMode.NONE}
+            visible={createComputed(() => state().wifi.enabled && state().wifi.networks.length > 0)}
+          >
             <For<QuickSettingsState["wifi"]["networks"][number], GObject.Object, string>
               each={createComputed(() => state().wifi.networks)}
               id={(network) => network.id}
@@ -572,24 +661,36 @@ export function QuickSettings(options: QuickSettingsOptions) {
           spacing={12}
           visible={isPageVisible("bluetooth")}
         >
-          <DetailHeader title="Bluetooth" onBack={() => navigate("main")} />
-          <Gtk.Box spacing={8}>
-            <Gtk.Switch
-              active={createComputed(() => state().bluetooth.enabled)}
-              sensitive={createComputed(() => state().bluetooth.available)}
-              tooltipText="Enable Bluetooth"
-              onStateSet={() => {
-                options.quickSettings.dispatch({ type: "toggle-bluetooth" })
-                return true
-              }}
-            />
-            <Gtk.Label
-              label={createComputed(() =>
-                state().bluetooth.enabled ? "Bluetooth on" : "Bluetooth off",
-              )}
-            />
-          </Gtk.Box>
-          <Gtk.ListBox class={quickSettingsList} selectionMode={Gtk.SelectionMode.NONE}>
+          <DetailHeader
+            title="Bluetooth"
+            iconName={createComputed(() =>
+              state().bluetooth.enabled
+                ? "bluetooth-active-symbolic"
+                : "bluetooth-disabled-symbolic",
+            )}
+            iconActive={createComputed(() => state().bluetooth.enabled)}
+            onBack={() => navigate("main")}
+          />
+          <Gtk.Label
+            class={quickSettingsEmptyState}
+            label={createComputed(() =>
+              state().bluetooth.enabled
+                ? "No Bluetooth devices found"
+                : "Turn on Bluetooth to connect to devices",
+            )}
+            wrap={true}
+            justify={Gtk.Justification.CENTER}
+            visible={createComputed(
+              () => !state().bluetooth.enabled || state().bluetooth.devices.length === 0,
+            )}
+          />
+          <Gtk.ListBox
+            class={quickSettingsList}
+            selectionMode={Gtk.SelectionMode.NONE}
+            visible={createComputed(
+              () => state().bluetooth.enabled && state().bluetooth.devices.length > 0,
+            )}
+          >
             <For<QuickSettingsState["bluetooth"]["devices"][number], GObject.Object, string>
               each={createComputed(() => state().bluetooth.devices)}
               id={(device) => device.id}
@@ -633,7 +734,11 @@ export function QuickSettings(options: QuickSettingsOptions) {
           spacing={12}
           visible={isPageVisible("audio")}
         >
-          <DetailHeader title="Sound Output" onBack={() => navigate("main")} />
+          <DetailHeader
+            title="Sound Output"
+            iconName={createComputed(() => state().audio.iconName)}
+            onBack={() => navigate("main")}
+          />
           <Gtk.ListBox class={quickSettingsList} selectionMode={Gtk.SelectionMode.NONE}>
             <For<QuickSettingsState["audio"]["outputs"][number], GObject.Object, string>
               each={createComputed(() => state().audio.outputs)}
@@ -659,7 +764,11 @@ export function QuickSettings(options: QuickSettingsOptions) {
           spacing={12}
           visible={isPageVisible("power-profile")}
         >
-          <DetailHeader title="Power Mode" onBack={() => navigate("main")} />
+          <DetailHeader
+            title="Power Mode"
+            iconName={createComputed(() => state().powerMode.iconName)}
+            onBack={() => navigate("main")}
+          />
           <Gtk.ListBox class={quickSettingsList} selectionMode={Gtk.SelectionMode.NONE}>
             <For<QuickSettingsState["powerMode"]["profiles"][number], GObject.Object, string>
               each={createComputed(() => state().powerMode.profiles)}
@@ -685,7 +794,11 @@ export function QuickSettings(options: QuickSettingsOptions) {
           spacing={12}
           visible={isPageVisible("orientation")}
         >
-          <DetailHeader title="Bar Orientation" onBack={() => navigate("main")} />
+          <DetailHeader
+            title="Bar Orientation"
+            iconName="view-dual-symbolic"
+            onBack={() => navigate("main")}
+          />
           <Gtk.Box orientation={Gtk.Orientation.HORIZONTAL} spacing={8} homogeneous={true}>
             <Gtk.ToggleButton
               class={quickSettingsChoice}
@@ -712,7 +825,11 @@ export function QuickSettings(options: QuickSettingsOptions) {
           spacing={12}
           visible={isPageVisible("session-confirmation")}
         >
-          <DetailHeader title="Power" onBack={() => navigate("main")} />
+          <DetailHeader
+            title="Power"
+            iconName="system-shutdown-symbolic"
+            onBack={() => navigate("main")}
+          />
           <Gtk.Box
             orientation={Gtk.Orientation.VERTICAL}
             spacing={12}
