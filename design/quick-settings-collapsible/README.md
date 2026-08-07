@@ -1,6 +1,8 @@
 # Collapsible Quick Settings/Notifications
 
 > Source: `source.png` (this directory) · 1200×1290 · generated 2026-08-08 by the `ui-doc`/`ui-slice` agent pipeline
+>
+> Related: [../quick-toggles/](../quick-toggles/README.md) — the earlier Quick Toggles concept this spec evolves (shared toggle grid, media card, notification group cards).
 
 ## Overview
 
