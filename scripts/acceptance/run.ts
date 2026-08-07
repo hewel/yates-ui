@@ -327,11 +327,12 @@ layout {
   const nestedDisplay = waylandDisplayFromNiriSocket(niriSocket)
   if (!nestedDisplay) return yield* failure("harness", "nested Wayland display was not derivable")
 
+  const applicationId = `me.pigmint.yates_ui.Acceptance.r${runId.replaceAll(/[^A-Za-z0-9_]/g, "_")}`
   const nestedEnvironment: NodeJS.ProcessEnv = {
     ...process.env,
     NIRI_SOCKET: niriSocket,
     WAYLAND_DISPLAY: nestedDisplay,
-    YATES_APPLICATION_ID: `me.pigmint.yates_ui.Acceptance.r${runId.replaceAll(/[^A-Za-z0-9_]/g, "_")}`,
+    YATES_APPLICATION_ID: applicationId,
     YATES_DEBUG: "1",
     YATES_FIXTURE_MODE: "1",
     YATES_RUN_ID: runId,
@@ -377,9 +378,10 @@ layout {
     ),
   )
 
-  const openSettings = yield* dbusCall(nestedEnvironment, busName, "OpenSettings")
-  if (!openSettings.includes('"ok":true')) {
-    return yield* failure("assertion", `OpenSettings failed: ${openSettings}`)
+  const openSettings = yield* runCommand(["gjs", "-m", appBundle, "--settings"], nestedEnvironment)
+  writeFileSync(join(artifactDir, "settings-entry.log"), openSettings.stdout + openSettings.stderr)
+  if (openSettings.code !== 0) {
+    return yield* failure("assertion", `settings command failed: ${openSettings.stderr}`)
   }
   const settingsVisible = yield* waitUntil("settings window visible", () =>
     snapshot(nestedEnvironment, busName, "settings-visible").pipe(
@@ -460,7 +462,7 @@ layout {
       detail: `activationCount=${afterActivation.activationCount}, bars=${afterActivation.outputs.length}`,
     },
     {
-      name: "settings-window-persists-orientation",
+      name: "settings-command-opens-and-persists-orientation",
       ok:
         settingsVisible.settings.visible &&
         horizontalBars.settings.barOrientation === "horizontal" &&

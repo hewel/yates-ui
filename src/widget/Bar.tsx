@@ -13,7 +13,6 @@ import { diagnosticLog } from "../debug/log"
 import { BarServices } from "../services/barServices"
 import {
   bar,
-  barActionButton,
   barVertical,
   batteryLabel,
   clock,
@@ -183,7 +182,6 @@ export interface CreateBarOptions {
   readonly application: Gtk.Application
   readonly orientation: BarOrientation
   readonly services: BarServices
-  readonly openSettings: () => void
 }
 
 export type BarInteraction = WorkspacePopupEvent
@@ -268,15 +266,6 @@ export function createBar(options: CreateBarOptions): BarInstance {
             {options.services.systemIndicators && (
               <BatteryStatus orientation={options.orientation} />
             )}
-            <Gtk.Button
-              class={barActionButton}
-              iconName="preferences-system-symbolic"
-              tooltipText="Settings"
-              onClicked={options.openSettings}
-              $={(self: Gtk.Button) => {
-                self.update_property([Gtk.AccessibleProperty.LABEL], ["Settings"])
-              }}
-            />
             <Gtk.Image iconName="system-shutdown-symbolic" pixelSize={16} />
           </Gtk.Box>
         </Gtk.CenterBox>

@@ -3,15 +3,6 @@ import Gtk from "gi://Gtk?version=4.0"
 import { Accessor, createRoot } from "gnim"
 
 import { BarOrientation } from "../settings/appSettingsModel"
-import {
-  orientationOption,
-  settingsCard,
-  settingsContent,
-  settingsDescription,
-  settingsLabel,
-  settingsTitle,
-  settingsWindow,
-} from "./SettingsWindow.css"
 
 function requireGtkWindow(value: unknown): Gtk.Window {
   if (value instanceof Gtk.Window) return value
@@ -43,48 +34,73 @@ export function createSettingsWindow(options: SettingsWindowOptions): SettingsWi
           application={options.application}
           name="settings"
           title="Yates UI Settings"
-          class={settingsWindow}
-          defaultWidth={320}
-          defaultHeight={184}
+          defaultWidth={480}
+          defaultHeight={180}
           resizable={false}
           hideOnClose={true}
         >
-          <Gtk.Box class={settingsContent} orientation={Gtk.Orientation.VERTICAL} spacing={16}>
-            <Gtk.Label class={settingsTitle} label="Settings" xalign={0} />
-            <Gtk.Box class={settingsCard} orientation={Gtk.Orientation.VERTICAL} spacing={6}>
-              <Gtk.Label class={settingsLabel} label="Bar orientation" xalign={0} />
-              <Gtk.Label
-                class={settingsDescription}
-                label="Choose how the bar is arranged on each output."
-                xalign={0}
-                wrap={true}
-              />
-              <Gtk.Box orientation={Gtk.Orientation.HORIZONTAL} spacing={8} marginTop={8}>
-                <Gtk.CheckButton
-                  class={orientationOption}
-                  label="Vertical"
-                  active={options.barOrientation.as((orientation) => orientation === "vertical")}
-                  onToggled={(self) => {
-                    if (self.active) options.setBarOrientation("vertical")
-                  }}
-                  $={(self: Gtk.CheckButton) => {
-                    verticalOption = self
-                  }}
-                />
-                <Gtk.CheckButton
-                  class={orientationOption}
-                  label="Horizontal"
-                  active={options.barOrientation.as((orientation) => orientation === "horizontal")}
-                  onToggled={(self) => {
-                    if (self.active) options.setBarOrientation("horizontal")
-                  }}
-                  $={(self: Gtk.CheckButton) => {
-                    horizontalOption = self
-                    self.set_group(verticalOption)
-                  }}
-                />
-              </Gtk.Box>
-            </Gtk.Box>
+          <Gtk.HeaderBar $type="titlebar" showTitleButtons={true} />
+          <Gtk.Box
+            orientation={Gtk.Orientation.VERTICAL}
+            marginTop={24}
+            marginBottom={24}
+            marginStart={24}
+            marginEnd={24}
+          >
+            <Gtk.Label class="heading" label="Bar" xalign={0} marginBottom={8} />
+            <Gtk.ListBox class="boxed-list" selectionMode={Gtk.SelectionMode.NONE}>
+              <Gtk.ListBoxRow selectable={false} activatable={false}>
+                <Gtk.Box
+                  orientation={Gtk.Orientation.HORIZONTAL}
+                  spacing={24}
+                  marginTop={12}
+                  marginBottom={12}
+                  marginStart={12}
+                  marginEnd={12}
+                >
+                  <Gtk.Box orientation={Gtk.Orientation.VERTICAL} spacing={3} hexpand={true}>
+                    <Gtk.Label label="Orientation" xalign={0} />
+                    <Gtk.Label
+                      class="dim-label"
+                      label="Choose how the bar is arranged on each output"
+                      xalign={0}
+                      wrap={true}
+                    />
+                  </Gtk.Box>
+                  <Gtk.Box
+                    orientation={Gtk.Orientation.HORIZONTAL}
+                    spacing={8}
+                    valign={Gtk.Align.CENTER}
+                  >
+                    <Gtk.CheckButton
+                      label="Vertical"
+                      active={options.barOrientation.as(
+                        (orientation) => orientation === "vertical",
+                      )}
+                      onToggled={(self) => {
+                        if (self.active) options.setBarOrientation("vertical")
+                      }}
+                      $={(self: Gtk.CheckButton) => {
+                        verticalOption = self
+                      }}
+                    />
+                    <Gtk.CheckButton
+                      label="Horizontal"
+                      active={options.barOrientation.as(
+                        (orientation) => orientation === "horizontal",
+                      )}
+                      onToggled={(self) => {
+                        if (self.active) options.setBarOrientation("horizontal")
+                      }}
+                      $={(self: Gtk.CheckButton) => {
+                        horizontalOption = self
+                        self.set_group(verticalOption)
+                      }}
+                    />
+                  </Gtk.Box>
+                </Gtk.Box>
+              </Gtk.ListBoxRow>
+            </Gtk.ListBox>
           </Gtk.Box>
         </Gtk.Window>
       )

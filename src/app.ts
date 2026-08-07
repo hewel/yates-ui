@@ -3,6 +3,7 @@ import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import Gtk from "gi://Gtk?version=4.0"
 
+import { programInvocationName } from "system"
 import style from "virtual:vanilla-bundle-url"
 
 import { startDebugControl } from "./debug/control"
@@ -15,6 +16,7 @@ import { WindowRegistry } from "./windowRegistry"
 
 const app = new Gtk.Application({
   application_id: GLib.getenv("YATES_APPLICATION_ID") ?? "me.pigmint.yates-ui",
+  flags: Gio.ApplicationFlags.HANDLES_COMMAND_LINE,
 })
 const services = createBarServices()
 const settings = createAppSettings()
@@ -30,6 +32,19 @@ function showSettings(): void {
   settingsWindow.show()
 }
 
+app.add_main_option(
+  "settings",
+  0,
+  GLib.OptionFlags.NONE,
+  GLib.OptionArg.NONE,
+  "Open Yates UI settings",
+  null,
+)
+const preferencesAction = new Gio.SimpleAction({ name: "preferences" })
+preferencesAction.connect("activate", showSettings)
+app.add_action(preferencesAction)
+app.set_accels_for_action("app.preferences", ["<Primary>comma"])
+
 const registry = new WindowRegistry<BarInstance>((connector) => {
   const monitor = monitorByConnector.get(connector)
   if (!monitor) throw new Error(`Monitor disappeared during reconciliation: ${connector}`)
@@ -38,7 +53,6 @@ const registry = new WindowRegistry<BarInstance>((connector) => {
     application: app,
     orientation: settings.barOrientation.peek(),
     services,
-    openSettings: showSettings,
   })
 })
 
@@ -98,6 +112,12 @@ app.connect("activate", () => {
   if (monitorsChangedSignal === 0) {
     monitorsChangedSignal = monitors.connect("items-changed", () => reconcileMonitors(display))
   }
+})
+
+app.connect("command-line", (_application, commandLine) => {
+  app.activate()
+  if (commandLine.get_options_dict().contains("settings")) preferencesAction.activate(null)
+  return 0
 })
 
 const unsubscribeOrientation = settings.barOrientation.subscribe(() => {
@@ -177,10 +197,6 @@ const debugControl = startDebugControl({
     handle.dispatch({ type: "popup-leave", origin: "debug" })
     return ok()
   },
-  openSettings: () => {
-    showSettings()
-    return ok()
-  },
   setBarOrientation: (orientation) => {
     if (orientation !== "vertical" && orientation !== "horizontal") {
       return JSON.stringify({ ok: false, error: "invalid-orientation" })
@@ -210,4 +226,4 @@ app.connect("shutdown", () => {
   diagnosticLog("app.shutdown")
 })
 
-app.run([])
+app.run([programInvocationName, ...ARGV])

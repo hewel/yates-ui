@@ -4,6 +4,7 @@
   "scripts": {
     "start": "rolldown -w -c",
     "build": "rolldown -c",
+    "settings": "bun run build && LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so gjs -m dist/runtime.js --settings",
     "test": "bun test",
     "acceptance:nested": "bun scripts/acceptance/run.ts",
     "acceptance:live": "bun scripts/live-acceptance/run.ts",

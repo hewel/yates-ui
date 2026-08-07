@@ -39,26 +39,6 @@ export const workspaceButtonActive = style({
   fontWeight: "700",
 })
 
-export const barActionButton = style({
-  minWidth: "26px",
-  minHeight: "26px",
-  padding: "4px",
-  border: "none",
-  borderRadius: "8px",
-  backgroundColor: "transparent",
-  color: "#c0c4d0",
-  ":hover": {
-    backgroundColor: "rgba(255, 255, 255, 0.12)",
-    color: "#ffffff",
-  },
-  ":active": {
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-  },
-  ":focus-visible": {
-    outline: "2px solid #a9c7ff",
-  },
-})
-
 export const workspacePopup = style({
   backgroundColor: "#2a2a2e",
   borderRadius: "10px",
