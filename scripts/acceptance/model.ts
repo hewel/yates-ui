@@ -60,6 +60,10 @@ export const DebugSnapshot = Schema.Struct({
   ready: Schema.Boolean,
   pid: Schema.Number,
   activationCount: Schema.Number,
+  settings: Schema.Struct({
+    visible: Schema.Boolean,
+    barOrientation: Schema.Literal("vertical", "horizontal"),
+  }),
   niri: Schema.Struct({
     connected: Schema.Boolean,
     sequence: Schema.Number,
@@ -71,6 +75,7 @@ export const DebugSnapshot = Schema.Struct({
   outputs: Schema.Array(
     Schema.Struct({
       connector: Schema.String,
+      orientation: Schema.Literal("vertical", "horizontal"),
       barVisible: Schema.Boolean,
       popupVisible: Schema.Boolean,
       popupWorkspaceId: Schema.NullOr(Schema.Number),

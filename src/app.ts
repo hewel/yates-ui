@@ -8,26 +8,46 @@ import style from "virtual:vanilla-bundle-url"
 import { startDebugControl } from "./debug/control"
 import { diagnosticLog } from "./debug/log"
 import { createBarServices } from "./services/barServices"
+import { createAppSettings } from "./settings/appSettings"
 import { BarInstance, createBar } from "./widget/Bar"
+import { SettingsWindowHandle, createSettingsWindow } from "./widget/SettingsWindow"
 import { WindowRegistry } from "./windowRegistry"
-
-const BAR_ORIENTATION = "vertical"
 
 const app = new Gtk.Application({
   application_id: GLib.getenv("YATES_APPLICATION_ID") ?? "me.pigmint.yates-ui",
 })
 const services = createBarServices()
+const settings = createAppSettings()
 const monitorByConnector = new Map<string, Gdk.Monitor>()
+let settingsWindow: SettingsWindowHandle | null = null
+
+function showSettings(): void {
+  settingsWindow ??= createSettingsWindow({
+    application: app,
+    barOrientation: settings.barOrientation,
+    setBarOrientation: settings.setBarOrientation,
+  })
+  settingsWindow.show()
+}
+
 const registry = new WindowRegistry<BarInstance>((connector) => {
   const monitor = monitorByConnector.get(connector)
   if (!monitor) throw new Error(`Monitor disappeared during reconciliation: ${connector}`)
-  return createBar({ monitor, application: app, orientation: BAR_ORIENTATION, services })
+  return createBar({
+    monitor,
+    application: app,
+    orientation: settings.barOrientation.peek(),
+    services,
+    openSettings: showSettings,
+  })
 })
 
 let activationCount = 0
 let cssLoaded = false
 let monitorsChangedSignal = 0
 let activeDebugConnector: string | null = null
+let activeDisplay: Gdk.Display | null = null
+let orientationReconcileSource = 0
 
 function loadCss(display: Gdk.Display) {
   if (!style || cssLoaded) return
@@ -69,6 +89,7 @@ app.connect("activate", () => {
   activationCount += 1
   const display = Gdk.Display.get_default()
   if (!display) return
+  activeDisplay = display
 
   loadCss(display)
   reconcileMonitors(display)
@@ -77,6 +98,21 @@ app.connect("activate", () => {
   if (monitorsChangedSignal === 0) {
     monitorsChangedSignal = monitors.connect("items-changed", () => reconcileMonitors(display))
   }
+})
+
+const unsubscribeOrientation = settings.barOrientation.subscribe(() => {
+  if (!activeDisplay || registry.connectors().length === 0) return
+  if (orientationReconcileSource !== 0) GLib.source_remove(orientationReconcileSource)
+  orientationReconcileSource = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+    orientationReconcileSource = 0
+    if (!activeDisplay) return GLib.SOURCE_REMOVE
+    registry.destroy()
+    reconcileMonitors(activeDisplay)
+    diagnosticLog("settings.bar-orientation.changed", {
+      orientation: settings.barOrientation.peek(),
+    })
+    return GLib.SOURCE_REMOVE
+  })
 })
 
 const ok = () => JSON.stringify({ ok: true })
@@ -89,6 +125,10 @@ const debugControl = startDebugControl({
       ready: registry.connectors().length > 0,
       pid: new Gio.Credentials().get_unix_pid(),
       activationCount,
+      settings: {
+        visible: settingsWindow?.visible() ?? false,
+        barOrientation: settings.barOrientation.peek(),
+      },
       niri: {
         connected: services.niri.connected(),
         sequence: state.sequence,
@@ -102,6 +142,7 @@ const debugControl = startDebugControl({
         const bar = handle?.snapshot()
         return {
           connector,
+          orientation: bar?.orientation ?? settings.barOrientation.peek(),
           barVisible: bar?.barVisible ?? false,
           popupVisible: bar?.popupVisible ?? false,
           popupWorkspaceId: bar?.popupWorkspaceId ?? null,
@@ -136,6 +177,17 @@ const debugControl = startDebugControl({
     handle.dispatch({ type: "popup-leave", origin: "debug" })
     return ok()
   },
+  openSettings: () => {
+    showSettings()
+    return ok()
+  },
+  setBarOrientation: (orientation) => {
+    if (orientation !== "vertical" && orientation !== "horizontal") {
+      return JSON.stringify({ ok: false, error: "invalid-orientation" })
+    }
+    settings.setBarOrientation(orientation)
+    return ok()
+  },
   reset: () => {
     for (const connector of registry.connectors()) {
       registry.get(connector)?.dispatch({ type: "reset", origin: "debug" })
@@ -146,9 +198,15 @@ const debugControl = startDebugControl({
 })
 
 app.connect("shutdown", () => {
+  if (orientationReconcileSource !== 0) GLib.source_remove(orientationReconcileSource)
+  orientationReconcileSource = 0
+  unsubscribeOrientation()
+  settingsWindow?.destroy()
+  settingsWindow = null
   debugControl?.stop()
   registry.destroy()
   services.stop()
+  settings.flush()
   diagnosticLog("app.shutdown")
 })
 

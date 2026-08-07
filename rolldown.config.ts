@@ -2,6 +2,7 @@ import { vanillaExtractPlugin } from "@vanilla-extract/rollup-plugin"
 import { defineConfig } from "rolldown"
 import esbuild from "rollup-plugin-esbuild"
 
+import { gSettingsSchema } from "./plugins/gSettingsSchema"
 import { runGjs } from "./plugins/runGjs"
 import { vanillaCssUrl } from "./plugins/vanillaCssUrl"
 
@@ -36,6 +37,7 @@ export default defineConfig({
       },
     }),
     vanillaCssUrl({ fileName: "style.css" }),
+    gSettingsSchema({ schemaFile: "data/me.pigmint.yates-ui.gschema.xml" }),
     runGjs(),
   ],
 })

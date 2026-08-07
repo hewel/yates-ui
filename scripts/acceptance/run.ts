@@ -335,6 +335,7 @@ layout {
     YATES_DEBUG: "1",
     YATES_FIXTURE_MODE: "1",
     YATES_RUN_ID: runId,
+    GSETTINGS_BACKEND: "memory",
     LD_PRELOAD: "/usr/lib/libgtk4-layer-shell.so",
   }
   writeFileSync(
@@ -373,6 +374,33 @@ layout {
   const afterActivation = yield* waitUntil("second activation", () =>
     snapshot(nestedEnvironment, busName, "after-activation").pipe(
       Effect.map((value) => (value.activationCount >= 2 ? value : null)),
+    ),
+  )
+
+  const openSettings = yield* dbusCall(nestedEnvironment, busName, "OpenSettings")
+  if (!openSettings.includes('"ok":true')) {
+    return yield* failure("assertion", `OpenSettings failed: ${openSettings}`)
+  }
+  const settingsVisible = yield* waitUntil("settings window visible", () =>
+    snapshot(nestedEnvironment, busName, "settings-visible").pipe(
+      Effect.map((value) => (value.settings.visible ? value : null)),
+    ),
+  )
+  const setOrientation = yield* dbusCall(nestedEnvironment, busName, "SetBarOrientation", [
+    "horizontal",
+  ])
+  if (!setOrientation.includes('"ok":true')) {
+    return yield* failure("assertion", `SetBarOrientation failed: ${setOrientation}`)
+  }
+  const horizontalBars = yield* waitUntil("horizontal setting applied", () =>
+    snapshot(nestedEnvironment, busName, "settings-horizontal").pipe(
+      Effect.map((value) =>
+        value.settings.barOrientation === "horizontal" &&
+        value.outputs.length > 0 &&
+        value.outputs.every((output) => output.orientation === "horizontal")
+          ? value
+          : null,
+      ),
     ),
   )
 
@@ -430,6 +458,14 @@ layout {
           layersAfter.right,
         ).ok,
       detail: `activationCount=${afterActivation.activationCount}, bars=${afterActivation.outputs.length}`,
+    },
+    {
+      name: "settings-window-persists-orientation",
+      ok:
+        settingsVisible.settings.visible &&
+        horizontalBars.settings.barOrientation === "horizontal" &&
+        horizontalBars.outputs.every((output) => output.orientation === "horizontal"),
+      detail: `visible=${settingsVisible.settings.visible}, orientation=${horizontalBars.settings.barOrientation}, bars=${horizontalBars.outputs.length}`,
     },
     {
       name: "popup-dbus-transition",

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="me.pigmint.yates-ui" path="/me/pigmint/yates-ui/">
+    <key name="bar-orientation" type="s">
+      <choices>
+        <choice value="vertical" />
+        <choice value="horizontal" />
+      </choices>
+      <default>'vertical'</default>
+      <summary>Bar orientation</summary>
+      <description>Whether output bars use a vertical or horizontal layout.</description>
+    </key>
+  </schema>
+</schemalist>

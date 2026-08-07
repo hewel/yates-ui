@@ -13,6 +13,7 @@ import { diagnosticLog } from "../debug/log"
 import { BarServices } from "../services/barServices"
 import {
   bar,
+  barActionButton,
   barVertical,
   batteryLabel,
   clock,
@@ -182,12 +183,14 @@ export interface CreateBarOptions {
   readonly application: Gtk.Application
   readonly orientation: BarOrientation
   readonly services: BarServices
+  readonly openSettings: () => void
 }
 
 export type BarInteraction = WorkspacePopupEvent
 
 export interface BarSnapshot {
   readonly connector: string
+  readonly orientation: BarOrientation
   readonly barVisible: boolean
   readonly popupVisible: boolean
   readonly popupWorkspaceId: number | null
@@ -205,6 +208,7 @@ export function createBar(options: CreateBarOptions): BarInstance {
   const connector = options.monitor.connector ?? "unknown"
   const policy = orientationPolicy(options.orientation)
   let forwardPopupEvent = (_event: WorkspacePopupEvent) => {}
+  let popup: WorkspacePopupHandle | null = null
 
   const built = createRoot((dispose) => {
     const presentation = createComputed(() =>
@@ -264,6 +268,15 @@ export function createBar(options: CreateBarOptions): BarInstance {
             {options.services.systemIndicators && (
               <BatteryStatus orientation={options.orientation} />
             )}
+            <Gtk.Button
+              class={barActionButton}
+              iconName="preferences-system-symbolic"
+              tooltipText="Settings"
+              onClicked={options.openSettings}
+              $={(self: Gtk.Button) => {
+                self.update_property([Gtk.AccessibleProperty.LABEL], ["Settings"])
+              }}
+            />
             <Gtk.Image iconName="system-shutdown-symbolic" pixelSize={16} />
           </Gtk.Box>
         </Gtk.CenterBox>
@@ -287,16 +300,28 @@ export function createBar(options: CreateBarOptions): BarInstance {
   Gtk4LayerShell.auto_exclusive_zone_enable(built.window)
   Gtk4LayerShell.set_monitor(built.window, options.monitor)
 
-  const popup: WorkspacePopupHandle = createWorkspacePopup({
-    application: options.application,
-    monitor: options.monitor,
-    barWindow: built.window,
-    policy,
-    presentation: built.presentation,
-    resolveAnchor: built.resolveAnchor,
-    focusWindow: options.services.niri.focusWindow,
-  })
-  forwardPopupEvent = popup.dispatch
+  const ensurePopup = (): WorkspacePopupHandle => {
+    popup ??= createWorkspacePopup({
+      application: options.application,
+      monitor: options.monitor,
+      barWindow: built.window,
+      policy,
+      presentation: built.presentation,
+      resolveAnchor: built.resolveAnchor,
+      focusWindow: options.services.niri.focusWindow,
+    })
+    return popup
+  }
+  forwardPopupEvent = (event) => {
+    if (!popup) {
+      if (event.type !== "workspace-enter") return
+      const workspace = built.presentation
+        .peek()
+        .workspaces.find((candidate) => candidate.id === event.workspaceId)
+      if (!workspace || workspace.popupWindows.length === 0) return
+    }
+    ensurePopup().dispatch(event)
+  }
   const pointerMotion = new Gtk.EventControllerMotion()
   pointerMotion.connect("motion", (_controller, x, y) => {
     forwardPopupEvent({ type: "pointer-motion", point: { x, y }, origin: "pointer" })
@@ -307,20 +332,21 @@ export function createBar(options: CreateBarOptions): BarInstance {
   diagnosticLog("bar.created", { connector })
 
   return {
-    dispatch: popup.dispatch,
+    dispatch: forwardPopupEvent,
     snapshot: () => {
-      const popupObservation = popup.observation()
+      const popupObservation = popup?.observation()
       return {
         connector,
+        orientation: options.orientation,
         barVisible: built.window.visible,
-        popupVisible: popupObservation.visible,
-        popupWorkspaceId: popupObservation.workspaceId,
-        hideScheduled: popupObservation.hideScheduled,
-        lastPointerEvent: popupObservation.lastPointerEvent,
+        popupVisible: popupObservation?.visible ?? false,
+        popupWorkspaceId: popupObservation?.workspaceId ?? null,
+        hideScheduled: popupObservation?.hideScheduled ?? false,
+        lastPointerEvent: popupObservation?.lastPointerEvent ?? null,
       }
     },
     destroy: () => {
-      popup.destroy()
+      popup?.destroy()
       built.window.destroy()
       built.dispose()
       diagnosticLog("bar.destroyed", { connector })

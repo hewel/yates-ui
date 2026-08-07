@@ -1,6 +1,8 @@
 import { format } from "date-fns"
 
-export type BarOrientation = "horizontal" | "vertical"
+import { BarOrientation } from "../../settings/appSettingsModel"
+
+export type { BarOrientation } from "../../settings/appSettingsModel"
 
 export interface Rect {
   readonly x: number
