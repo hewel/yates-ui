@@ -142,6 +142,7 @@ const noActiveBar = () => JSON.stringify({ ok: false, error: "no-active-bar" })
 const debugControl = startDebugControl({
   snapshot: () => {
     const state = services.niri.state.peek()
+    const quickSettings = services.quickSettings.snapshot()
     return JSON.stringify({
       version: 1,
       ready: registry.connectors().length > 0,
@@ -150,6 +151,16 @@ const debugControl = startDebugControl({
       settings: {
         visible: settingsWindow?.visible() ?? false,
         barOrientation: settings.barOrientation.peek(),
+      },
+      quickSettings: {
+        volume: quickSettings.audio.volume,
+        wifiEnabled: quickSettings.wifi.enabled,
+        bluetoothEnabled: quickSettings.bluetooth.enabled,
+        powerProfile: quickSettings.powerMode.activeProfile,
+        darkMode: quickSettings.darkMode.enabled,
+        nightLight: quickSettings.nightLight.enabled,
+        pendingAction: quickSettings.pendingAction,
+        errorMessage: quickSettings.errorMessage,
       },
       niri: {
         connected: services.niri.connected(),
@@ -169,6 +180,7 @@ const debugControl = startDebugControl({
           popupVisible: bar?.popupVisible ?? false,
           popupWorkspaceId: bar?.popupWorkspaceId ?? null,
           quickSettingsVisible: bar?.quickSettingsVisible ?? false,
+          quickSettingsPage: bar?.quickSettingsPage ?? "main",
           hideScheduled: bar?.hideScheduled ?? false,
           lastPointerEvent: bar?.lastPointerEvent ?? null,
         }
@@ -204,6 +216,21 @@ const debugControl = startDebugControl({
     const handle = registry.get(output)
     if (!handle) return JSON.stringify({ ok: false, error: "unknown-output" })
     handle.showQuickSettings()
+    return ok()
+  },
+  navigateQuickSettings: (output, page) => {
+    const handle = registry.get(output)
+    if (!handle) return JSON.stringify({ ok: false, error: "unknown-output" })
+    if (!handle.navigateQuickSettings(page)) {
+      return JSON.stringify({ ok: false, error: "invalid-quick-settings-page" })
+    }
+    return ok()
+  },
+  setQuickSettingsVolume: (volume) => {
+    if (!Number.isFinite(volume) || volume < 0 || volume > 1) {
+      return JSON.stringify({ ok: false, error: "invalid-volume" })
+    }
+    services.quickSettings.dispatch({ type: "set-volume", value: volume })
     return ok()
   },
   setBarOrientation: (orientation) => {

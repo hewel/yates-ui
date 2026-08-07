@@ -27,7 +27,7 @@ import {
   projectBarPresentation,
 } from "./bar/barPresentation"
 import { BarLayoutSpec, BarOrientation, orientationPolicy } from "./bar/orientationPolicy"
-import { QuickSettings, QuickSettingsHandle } from "./bar/QuickSettings"
+import { QuickSettings, QuickSettingsHandle, QuickSettingsPage } from "./bar/QuickSettings"
 import { quickSettingsTrigger } from "./bar/QuickSettings.css"
 import { WorkspacePopupHandle, createWorkspacePopup } from "./bar/WorkspacePopup"
 import { PopupPointerEvent, WorkspacePopupEvent } from "./bar/workspacePopupSession"
@@ -201,6 +201,7 @@ export interface BarSnapshot {
   readonly popupVisible: boolean
   readonly popupWorkspaceId: number | null
   readonly quickSettingsVisible: boolean
+  readonly quickSettingsPage: QuickSettingsPage
   readonly hideScheduled: boolean
   readonly lastPointerEvent: PopupPointerEvent | null
 }
@@ -209,6 +210,7 @@ export interface BarInstance {
   dispatch(event: BarInteraction): void
   showQuickSettings(): void
   hideQuickSettings(): void
+  navigateQuickSettings(page: string): boolean
   snapshot(): BarSnapshot
   destroy(): void
 }
@@ -290,6 +292,7 @@ export function createBar(options: CreateBarOptions): BarInstance {
                 )}
               </Gtk.Box>
               <QuickSettings
+                quickSettings={options.services.quickSettings}
                 orientation={options.orientation}
                 setBarOrientation={options.setBarOrientation}
                 openSettings={options.openSettings}
@@ -355,6 +358,7 @@ export function createBar(options: CreateBarOptions): BarInstance {
     dispatch: forwardPopupEvent,
     showQuickSettings: () => quickSettings?.show(),
     hideQuickSettings: () => quickSettings?.hide(),
+    navigateQuickSettings: (page) => quickSettings?.navigate(page) ?? false,
     snapshot: () => {
       const popupObservation = popup?.observation()
       return {
@@ -364,6 +368,7 @@ export function createBar(options: CreateBarOptions): BarInstance {
         popupVisible: popupObservation?.visible ?? false,
         popupWorkspaceId: popupObservation?.workspaceId ?? null,
         quickSettingsVisible: quickSettings?.visible() ?? false,
+        quickSettingsPage: quickSettings?.page() ?? "main",
         hideScheduled: popupObservation?.hideScheduled ?? false,
         lastPointerEvent: popupObservation?.lastPointerEvent ?? null,
       }

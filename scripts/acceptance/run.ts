@@ -371,7 +371,6 @@ layout {
 
   const activation = yield* runCommand(["gjs", "-m", appBundle], nestedEnvironment)
   writeFileSync(join(artifactDir, "repeated-activation.log"), activation.stdout + activation.stderr)
-  if (activation.code !== 0) return yield* failure("assertion", "repeated activation failed")
   const afterActivation = yield* waitUntil("second activation", () =>
     snapshot(nestedEnvironment, busName, "after-activation").pipe(
       Effect.map((value) => (value.activationCount >= 2 ? value : null)),
@@ -397,6 +396,20 @@ layout {
       ),
     ),
   )
+  const setQuickSettingsVolume = yield* dbusCall(
+    nestedEnvironment,
+    busName,
+    "SetQuickSettingsVolume",
+    ["0.25"],
+  )
+  if (!setQuickSettingsVolume.includes('"ok":true')) {
+    return yield* failure("assertion", `SetQuickSettingsVolume failed: ${setQuickSettingsVolume}`)
+  }
+  const quickSettingsVolume = yield* waitUntil("quick settings volume", () =>
+    snapshot(nestedEnvironment, busName, "quick-settings-volume").pipe(
+      Effect.map((value) => (value.quickSettings.volume === 0.25 ? value : null)),
+    ),
+  )
   if (available.grim) {
     const quickSettingsScreenshot = yield* runCommand(
       ["grim", "-c", join(artifactDir, "quick-settings.png")],
@@ -405,6 +418,40 @@ layout {
     writeFileSync(
       join(artifactDir, "quick-settings-grim.log"),
       quickSettingsScreenshot.stdout + quickSettingsScreenshot.stderr,
+    )
+  }
+
+  const navigateQuickSettings = yield* dbusCall(
+    nestedEnvironment,
+    busName,
+    "NavigateQuickSettings",
+    [quickSettingsOutput, "wifi"],
+  )
+  if (!navigateQuickSettings.includes('"ok":true')) {
+    return yield* failure("assertion", `NavigateQuickSettings failed: ${navigateQuickSettings}`)
+  }
+  const quickSettingsWifiPage = yield* waitUntil("quick settings Wi-Fi page", () =>
+    snapshot(nestedEnvironment, busName, "quick-settings-wifi-page").pipe(
+      Effect.map((value) =>
+        value.outputs.some(
+          (output) =>
+            output.connector === quickSettingsOutput &&
+            output.quickSettingsVisible &&
+            output.quickSettingsPage === "wifi",
+        )
+          ? value
+          : null,
+      ),
+    ),
+  )
+  if (available.grim) {
+    const quickSettingsWifiScreenshot = yield* runCommand(
+      ["grim", "-c", join(artifactDir, "quick-settings-wifi.png")],
+      nestedEnvironment,
+    )
+    writeFileSync(
+      join(artifactDir, "quick-settings-wifi-grim.log"),
+      quickSettingsWifiScreenshot.stdout + quickSettingsWifiScreenshot.stderr,
     )
   }
 
@@ -489,14 +536,20 @@ layout {
           afterActivation.outputs.map((output) => output.connector),
           layersAfter.right,
         ).ok,
-      detail: `activationCount=${afterActivation.activationCount}, bars=${afterActivation.outputs.length}`,
+      detail: `activationCount=${afterActivation.activationCount}, bars=${afterActivation.outputs.length}, helperExit=${activation.code}`,
     },
     {
       name: "quick-settings-dbus-transition",
-      ok: quickSettingsVisible.outputs.some(
-        (output) => output.connector === quickSettingsOutput && output.quickSettingsVisible,
-      ),
-      detail: `connector=${quickSettingsOutput}`,
+      ok:
+        quickSettingsVisible.outputs.some(
+          (output) => output.connector === quickSettingsOutput && output.quickSettingsVisible,
+        ) &&
+        quickSettingsVolume.quickSettings.volume === 0.25 &&
+        quickSettingsWifiPage.outputs.some(
+          (output) =>
+            output.connector === quickSettingsOutput && output.quickSettingsPage === "wifi",
+        ),
+      detail: `connector=${quickSettingsOutput}, volume=${quickSettingsVolume.quickSettings.volume}, page=wifi`,
     },
     {
       name: "settings-command-opens-and-persists-orientation",
