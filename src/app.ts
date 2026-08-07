@@ -143,6 +143,16 @@ const debugControl = startDebugControl({
   snapshot: () => {
     const state = services.niri.state.peek()
     const quickSettings = services.quickSettings.snapshot()
+    const fixtureProfile = GLib.getenv("YATES_FIXTURE_PROFILE") ?? "laptop"
+    const availableCapabilities = Object.entries(quickSettings)
+      .filter(
+        (entry): entry is [string, { readonly available: true }] =>
+          typeof entry[1] === "object" &&
+          entry[1] !== null &&
+          "available" in entry[1] &&
+          entry[1].available === true,
+      )
+      .map(([name]) => name)
     return JSON.stringify({
       version: 1,
       ready: registry.connectors().length > 0,
@@ -153,14 +163,17 @@ const debugControl = startDebugControl({
         barOrientation: settings.barOrientation.peek(),
       },
       quickSettings: {
+        fixtureProfile,
+        availableCapabilities,
         volume: quickSettings.audio.volume,
         wifiEnabled: quickSettings.wifi.enabled,
         bluetoothEnabled: quickSettings.bluetooth.enabled,
         powerProfile: quickSettings.powerMode.activeProfile,
         darkMode: quickSettings.darkMode.enabled,
         nightLight: quickSettings.nightLight.enabled,
-        pendingAction: quickSettings.pendingAction,
-        errorMessage: quickSettings.errorMessage,
+        locked: quickSettings.session.locked,
+        pending: quickSettings.pending,
+        error: quickSettings.error,
       },
       niri: {
         connected: services.niri.connected(),
@@ -180,7 +193,7 @@ const debugControl = startDebugControl({
           popupVisible: bar?.popupVisible ?? false,
           popupWorkspaceId: bar?.popupWorkspaceId ?? null,
           quickSettingsVisible: bar?.quickSettingsVisible ?? false,
-          quickSettingsPage: bar?.quickSettingsPage ?? "main",
+          quickSettingsDetail: bar?.quickSettingsDetail ?? null,
           hideScheduled: bar?.hideScheduled ?? false,
           lastPointerEvent: bar?.lastPointerEvent ?? null,
         }
@@ -221,8 +234,17 @@ const debugControl = startDebugControl({
   navigateQuickSettings: (output, page) => {
     const handle = registry.get(output)
     if (!handle) return JSON.stringify({ ok: false, error: "unknown-output" })
-    if (!handle.navigateQuickSettings(page)) {
+    if (!handle.openQuickSettingsDetail(page === "main" ? null : page)) {
       return JSON.stringify({ ok: false, error: "invalid-quick-settings-page" })
+    }
+    return ok()
+  },
+  openQuickSettingsDetail: (output, detail) => {
+    const handle = registry.get(output)
+    if (!handle) return JSON.stringify({ ok: false, error: "unknown-output" })
+    const target = detail === "" || detail === "main" ? null : detail
+    if (!handle.openQuickSettingsDetail(target)) {
+      return JSON.stringify({ ok: false, error: "invalid-quick-settings-detail" })
     }
     return ok()
   },

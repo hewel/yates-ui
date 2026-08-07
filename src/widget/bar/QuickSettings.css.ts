@@ -42,7 +42,6 @@ export const quickSettingsPopover = style({
 globalStyle(`${quickSettingsPopover} contents`, {
   padding: "0",
   border: "none",
-  borderRadius: "28px",
   backgroundColor: "transparent",
   boxShadow: "none",
 })
@@ -58,19 +57,16 @@ export const quickSettingsPanel = style({
 
 export const quickSettingsMain = style({ minWidth: "376px" })
 
-export const quickSettingsDetails = style({ minWidth: "376px" })
+export const quickSettingsSection = style({
+  opacity: 1,
+  transition: "opacity 160ms cubic-bezier(0.2, 0, 0, 1)",
+})
+
+export const quickSettingsSectionDimmed = style({ opacity: 0.46 })
 
 export const quickSettingsTopRow = style({ minHeight: "40px" })
 
 export const quickSettingsActionGroup = style({ minHeight: "40px" })
-
-export const quickSettingsHeader = style({ minHeight: "48px" })
-
-export const quickSettingsTitle = style({
-  color: foreground,
-  fontSize: "20px",
-  fontWeight: "700",
-})
 
 export const quickSettingsSubtitle = style({
   color: dimForeground,
@@ -86,7 +82,6 @@ export const quickSettingsBattery = style({
 })
 
 export const quickSettingsBatteryValue = style({
-  fontVariantNumeric: "tabular-nums",
   fontWeight: "700",
 })
 
@@ -111,12 +106,14 @@ export const quickSettingsSlider = style({
 globalStyle(`${quickSettingsSlider} trough`, {
   minHeight: "4px",
   borderRadius: "2px",
+  backgroundImage: "none",
   backgroundColor: "#777777",
 })
 
 globalStyle(`${quickSettingsSlider} highlight`, {
   minHeight: "4px",
   borderRadius: "2px",
+  backgroundImage: "none",
   backgroundColor: activeBackground,
 })
 
@@ -128,9 +125,67 @@ globalStyle(`${quickSettingsSlider} slider`, {
   boxShadow: "none",
 })
 
-export const quickSettingsTileGrid = style({ minWidth: "376px" })
+export const quickSettingsTileRows = style({ minWidth: "376px" })
 
-export const quickSettingsTileSlot = style({ minWidth: "0" })
+export const quickSettingsTileRow = style({ minHeight: "48px" })
+
+export const quickSettingsTilePlaceholder = style({
+  minWidth: "0",
+  minHeight: "48px",
+  padding: "0",
+  backgroundColor: "transparent",
+  boxShadow: "none",
+})
+
+globalStyle(`${quickSettingsTilePlaceholder}:hover`, {
+  backgroundColor: "rgba(255, 255, 255, 0.05)",
+})
+
+export const quickSettingsInlineDetail = style({
+  padding: "10px 0 4px",
+  borderRadius: "20px",
+  backgroundColor: "#353535",
+})
+
+export const quickSettingsExpandedHeader = style({
+  minHeight: "48px",
+  padding: "0 10px",
+})
+
+export const quickSettingsExpandedToggle = style({
+  minWidth: "48px",
+  minHeight: "48px",
+  padding: "0",
+  borderRadius: "24px",
+  backgroundColor: controlBackground,
+  color: foreground,
+  ":checked": { backgroundColor: activeBackground },
+  ":hover": { backgroundColor: controlHover },
+  ":focus-visible": focus,
+})
+
+export const quickSettingsExpandedTitle = style({
+  color: foreground,
+  fontSize: "18px",
+  fontWeight: "700",
+})
+
+export const quickSettingsSettingsPill = style({
+  minHeight: "32px",
+  padding: "0 14px",
+  borderRadius: "16px",
+  backgroundColor: controlBackground,
+  color: foreground,
+  ":hover": { backgroundColor: controlHover },
+  ":focus-visible": focus,
+})
+
+export const quickSettingsExtension = style({
+  paddingTop: "12px",
+  borderTop: "1px solid rgba(255, 255, 255, 0.10)",
+  backgroundColor: "transparent",
+  color: foreground,
+})
 
 export const quickSettingsTilePrimary = style({
   minWidth: "0",
@@ -209,16 +264,6 @@ export const quickSettingsTileLabel = style({
   fontWeight: "700",
 })
 
-export const quickSettingsBackButton = style({
-  minWidth: "40px",
-  minHeight: "40px",
-  padding: "0",
-  borderRadius: "20px",
-  color: foreground,
-  ":hover": { backgroundColor: controlHover },
-  ":focus-visible": focus,
-})
-
 export const quickSettingsList = style({
   padding: "6px",
   backgroundColor: "transparent",
@@ -280,5 +325,3 @@ export const quickSettingsError = style({
   color: "@error_color",
   fontSize: "12px",
 })
-
-export const quickSettingsConfirmation = style({ minHeight: "208px" })

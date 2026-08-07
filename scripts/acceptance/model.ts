@@ -10,6 +10,67 @@ export const exitCodes = {
 
 export type AcceptanceStatus = keyof typeof exitCodes
 
+export const fixtureProfiles = [
+  "laptop",
+  "desktop",
+  "complex",
+  "lockscreen-laptop",
+  "lockscreen-desktop",
+  "empty-states",
+] as const
+
+export type FixtureProfile = (typeof fixtureProfiles)[number]
+
+const laptopCapabilities = [
+  "battery",
+  "brightness",
+  "audio",
+  "wifi",
+  "bluetooth",
+  "powerMode",
+  "darkMode",
+  "nightLight",
+  "airplaneMode",
+  "backgroundApps",
+] as const
+
+export const fixtureProfileCapabilities: Readonly<Record<FixtureProfile, ReadonlyArray<string>>> = {
+  laptop: laptopCapabilities,
+  desktop: ["wired", "powerMode", "darkMode", "nightLight"],
+  complex: [...laptopCapabilities, "wired", "vpn", "mobile", "bluetoothTether", "autoRotate"],
+  "lockscreen-laptop": laptopCapabilities,
+  "lockscreen-desktop": ["wired", "powerMode", "darkMode", "nightLight"],
+  "empty-states": [
+    "battery",
+    "brightness",
+    "audio",
+    "wifi",
+    "vpn",
+    "bluetooth",
+    "powerMode",
+    "darkMode",
+    "nightLight",
+    "airplaneMode",
+  ],
+}
+
+export function isFixtureProfile(value: string): value is FixtureProfile {
+  return fixtureProfiles.some((profile) => profile === value)
+}
+
+export function assertFixtureProfileCapabilities(
+  profile: FixtureProfile,
+  actual: ReadonlyArray<string>,
+): AssertionResult {
+  const expected = [...fixtureProfileCapabilities[profile]].sort()
+  const received = [...actual].sort()
+  return {
+    name: `quick-settings-profile-capabilities-${profile}`,
+    ok: JSON.stringify(received) === JSON.stringify(expected),
+    detail: `expected=${expected.join(",")}; actual=${received.join(",")}`,
+  }
+}
+
 export interface AssertionResult {
   readonly name: string
   readonly ok: boolean
@@ -65,14 +126,28 @@ export const DebugSnapshot = Schema.Struct({
     barOrientation: Schema.Literal("vertical", "horizontal"),
   }),
   quickSettings: Schema.Struct({
+    fixtureProfile: Schema.Literal(...fixtureProfiles),
+    availableCapabilities: Schema.Array(Schema.String),
     volume: Schema.Number,
     wifiEnabled: Schema.Boolean,
     bluetoothEnabled: Schema.Boolean,
     powerProfile: Schema.String,
     darkMode: Schema.Boolean,
     nightLight: Schema.Boolean,
-    pendingAction: Schema.NullOr(Schema.String),
-    errorMessage: Schema.NullOr(Schema.String),
+    locked: Schema.Boolean,
+    pending: Schema.NullOr(
+      Schema.Struct({
+        kind: Schema.String,
+        targetId: Schema.NullOr(Schema.String),
+      }),
+    ),
+    error: Schema.NullOr(
+      Schema.Struct({
+        kind: Schema.String,
+        targetId: Schema.NullOr(Schema.String),
+        message: Schema.String,
+      }),
+    ),
   }),
   niri: Schema.Struct({
     connected: Schema.Boolean,
@@ -90,15 +165,7 @@ export const DebugSnapshot = Schema.Struct({
       popupVisible: Schema.Boolean,
       popupWorkspaceId: Schema.NullOr(Schema.Number),
       quickSettingsVisible: Schema.Boolean,
-      quickSettingsPage: Schema.Literal(
-        "main",
-        "wifi",
-        "bluetooth",
-        "audio",
-        "power-profile",
-        "orientation",
-        "session-confirmation",
-      ),
+      quickSettingsDetail: Schema.NullOr(Schema.String),
       hideScheduled: Schema.Boolean,
     }),
   ),

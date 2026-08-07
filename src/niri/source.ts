@@ -10,25 +10,27 @@ import {
   focusWindowRequest,
   focusWorkspaceRequest,
   initialNiriState,
+  stopCastRequest,
 } from "./state"
 
 export interface NiriStateSource {
   readonly state: Accessor<NiriState>
   readonly socketPath: string | null
-  readonly connected: () => boolean
+  readonly connected: Accessor<boolean>
   focusWorkspace(workspaceId: number): void
   focusWindow(windowId: number): void
+  stopCast(sessionId: number): void
   stop(): void
 }
 
 export function createNiriStateSource(): NiriStateSource {
   const [state, setState] = createState(initialNiriState)
+  const [connected, setConnected] = createState(false)
   const socketPath = GLib.getenv("NIRI_SOCKET")
   const cancellable = new Gio.Cancellable()
   let connection: Gio.SocketConnection | null = null
   let reconnectSource = 0
   let stopped = false
-  let isConnected = false
 
   const scheduleReconnect = () => {
     if (stopped || reconnectSource !== 0) return
@@ -46,7 +48,7 @@ export function createNiriStateSource(): NiriStateSource {
       try {
         const [line] = stream.read_line_finish_utf8(result)
         if (line === null) {
-          isConnected = false
+          setConnected(false)
           diagnosticLog("niri.disconnected")
           scheduleReconnect()
           return
@@ -60,7 +62,7 @@ export function createNiriStateSource(): NiriStateSource {
         readNext(stream)
       } catch (cause) {
         if (!stopped) {
-          isConnected = false
+          setConnected(false)
           diagnosticLog("niri.read.failed", { error: String(cause) })
           scheduleReconnect()
         }
@@ -85,12 +87,12 @@ export function createNiriStateSource(): NiriStateSource {
           base_stream: nextConnection.get_input_stream(),
         })
         output.put_string('"EventStream"\n', cancellable)
-        isConnected = true
+        setConnected(true)
         diagnosticLog("niri.connected", { socket: socketPath })
         readNext(input)
       } catch (cause) {
         if (!stopped) {
-          isConnected = false
+          setConnected(false)
           diagnosticLog("niri.connect.failed", { error: String(cause) })
           scheduleReconnect()
         }
@@ -123,17 +125,20 @@ export function createNiriStateSource(): NiriStateSource {
   return {
     state,
     socketPath,
-    connected: () => isConnected,
+    connected,
     focusWorkspace: (workspaceId) => {
       sendRequest(focusWorkspaceRequest(workspaceId))
     },
     focusWindow: (windowId) => {
       sendRequest(focusWindowRequest(windowId))
     },
+    stopCast: (sessionId) => {
+      sendRequest(stopCastRequest(sessionId))
+    },
     stop: () => {
       if (stopped) return
       stopped = true
-      isConnected = false
+      setConnected(false)
       cancellable.cancel()
       if (reconnectSource !== 0) GLib.source_remove(reconnectSource)
       connection?.close(null)

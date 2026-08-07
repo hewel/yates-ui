@@ -25,6 +25,11 @@ const interfaceXml = `
       <arg direction="in" type="s" name="page"/>
       <arg direction="out" type="s" name="result"/>
     </method>
+    <method name="OpenQuickSettingsDetail">
+      <arg direction="in" type="s" name="output"/>
+      <arg direction="in" type="s" name="detail"/>
+      <arg direction="out" type="s" name="result"/>
+    </method>
     <method name="SetQuickSettingsVolume">
       <arg direction="in" type="d" name="volume"/>
       <arg direction="out" type="s" name="result"/>
@@ -45,6 +50,7 @@ export interface DebugControlHandlers {
   popupLeave(): string
   openQuickSettings(output: string): string
   navigateQuickSettings(output: string, page: string): string
+  openQuickSettingsDetail(output: string, detail: string): string
   setQuickSettingsVolume(volume: number): string
   setBarOrientation(orientation: string): string
   reset(): string
@@ -72,6 +78,8 @@ export function startDebugControl(handlers: DebugControlHandlers): DebugControl 
     OpenQuickSettings: (output: string) => handlers.openQuickSettings(output),
     NavigateQuickSettings: (output: string, page: string) =>
       handlers.navigateQuickSettings(output, page),
+    OpenQuickSettingsDetail: (output: string, detail: string) =>
+      handlers.openQuickSettingsDetail(output, detail),
     SetQuickSettingsVolume: (volume: number) => handlers.setQuickSettingsVolume(volume),
     SetBarOrientation: (orientation: string) => handlers.setBarOrientation(orientation),
     Reset: () => handlers.reset(),

@@ -2,7 +2,15 @@
 
 import { Data, Effect, Either, Schema } from "effect"
 import { spawn } from "node:child_process"
-import { appendFileSync, chmodSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs"
+import {
+  appendFileSync,
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+} from "node:fs"
 import { join, resolve } from "node:path"
 
 import {
@@ -11,9 +19,11 @@ import {
   DebugSnapshot,
   NiriLayers,
   ToolPaths,
+  assertFixtureProfileCapabilities,
   assertOneBarPerOutput,
   classifyIsolatedSessionExit,
   decodeGdbusString,
+  fixtureProfiles,
   makeResult,
   preflightEnvironment,
   waylandDisplayFromNiriSocket,
@@ -61,6 +71,7 @@ const stderrPath = join(artifactDir, "stderr.jsonl")
 const manifestPath = join(artifactDir, "manifest.json")
 const resultPath = join(artifactDir, "result.json")
 const children: ManagedChild[] = []
+const primaryFixtureProfile = fixtureProfiles[0]
 
 mkdirSync(artifactDir, { recursive: true })
 
@@ -191,6 +202,7 @@ function waitUntil<A>(
   description: string,
   operation: () => Effect.Effect<A | null, AcceptanceFailure>,
   timeoutMs = 10_000,
+  timeoutStatus: AcceptanceFailure["status"] = "environment",
 ): Effect.Effect<A, AcceptanceFailure> {
   return Effect.gen(function* () {
     const started = Date.now()
@@ -199,8 +211,15 @@ function waitUntil<A>(
       if (value !== null) return value
       yield* Effect.sleep("100 millis")
     }
-    return yield* failure("environment", `timed out waiting for ${description}`)
+    return yield* failure(timeoutStatus, `timed out waiting for ${description}`)
   })
+}
+
+function waitUntilAssertion<A>(
+  description: string,
+  operation: () => Effect.Effect<A | null, AcceptanceFailure>,
+): Effect.Effect<A, AcceptanceFailure> {
+  return waitUntil(description, operation, 10_000, "assertion")
 }
 
 function niriSocketForPid(pid: number): string | null {
@@ -335,6 +354,7 @@ layout {
     YATES_APPLICATION_ID: applicationId,
     YATES_DEBUG: "1",
     YATES_FIXTURE_MODE: "1",
+    YATES_FIXTURE_PROFILE: primaryFixtureProfile,
     YATES_RUN_ID: runId,
     GSETTINGS_BACKEND: "memory",
     LD_PRELOAD: "/usr/lib/libgtk4-layer-shell.so",
@@ -352,7 +372,7 @@ layout {
   const app = yield* acquireChild("app", ["gjs", "-m", appBundle], nestedEnvironment)
   const busName = `me.pigmint.YatesUi.Debug.r${runId.replaceAll(/[^A-Za-z0-9_]/g, "_")}`
 
-  const firstSnapshot = yield* waitUntil("debug Ping and ready snapshot", () =>
+  const firstSnapshot = yield* waitUntilAssertion("debug Ping and ready snapshot", () =>
     app.process.exitCode !== null || app.process.signalCode !== null
       ? Effect.fail(failure("assertion", "application exited before debug readiness"))
       : dbusCall(nestedEnvironment, busName, "Ping").pipe(
@@ -371,7 +391,7 @@ layout {
 
   const activation = yield* runCommand(["gjs", "-m", appBundle], nestedEnvironment)
   writeFileSync(join(artifactDir, "repeated-activation.log"), activation.stdout + activation.stderr)
-  const afterActivation = yield* waitUntil("second activation", () =>
+  const afterActivation = yield* waitUntilAssertion("second activation", () =>
     snapshot(nestedEnvironment, busName, "after-activation").pipe(
       Effect.map((value) => (value.activationCount >= 2 ? value : null)),
     ),
@@ -385,7 +405,7 @@ layout {
   if (!openQuickSettings.includes('"ok":true')) {
     return yield* failure("assertion", `OpenQuickSettings failed: ${openQuickSettings}`)
   }
-  const quickSettingsVisible = yield* waitUntil("quick settings visible", () =>
+  const quickSettingsVisible = yield* waitUntilAssertion("quick settings visible", () =>
     snapshot(nestedEnvironment, busName, "quick-settings-visible").pipe(
       Effect.map((value) =>
         value.outputs.some(
@@ -394,6 +414,7 @@ layout {
           ? value
           : null,
       ),
+      Effect.catchAll(() => Effect.succeed(null)),
     ),
   )
   const setQuickSettingsVolume = yield* dbusCall(
@@ -405,11 +426,12 @@ layout {
   if (!setQuickSettingsVolume.includes('"ok":true')) {
     return yield* failure("assertion", `SetQuickSettingsVolume failed: ${setQuickSettingsVolume}`)
   }
-  const quickSettingsVolume = yield* waitUntil("quick settings volume", () =>
+  const quickSettingsVolume = yield* waitUntilAssertion("quick settings volume", () =>
     snapshot(nestedEnvironment, busName, "quick-settings-volume").pipe(
       Effect.map((value) => (value.quickSettings.volume === 0.25 ? value : null)),
     ),
   )
+  yield* Effect.sleep("250 millis")
   if (available.grim) {
     const quickSettingsScreenshot = yield* runCommand(
       ["grim", "-c", join(artifactDir, "quick-settings.png")],
@@ -421,29 +443,30 @@ layout {
     )
   }
 
-  const navigateQuickSettings = yield* dbusCall(
+  const openQuickSettingsDetail = yield* dbusCall(
     nestedEnvironment,
     busName,
-    "NavigateQuickSettings",
+    "OpenQuickSettingsDetail",
     [quickSettingsOutput, "wifi"],
   )
-  if (!navigateQuickSettings.includes('"ok":true')) {
-    return yield* failure("assertion", `NavigateQuickSettings failed: ${navigateQuickSettings}`)
+  if (!openQuickSettingsDetail.includes('"ok":true')) {
+    return yield* failure("assertion", `OpenQuickSettingsDetail failed: ${openQuickSettingsDetail}`)
   }
-  const quickSettingsWifiPage = yield* waitUntil("quick settings Wi-Fi page", () =>
-    snapshot(nestedEnvironment, busName, "quick-settings-wifi-page").pipe(
+  const quickSettingsWifiDetail = yield* waitUntilAssertion("quick settings Wi-Fi detail", () =>
+    snapshot(nestedEnvironment, busName, "quick-settings-wifi-detail").pipe(
       Effect.map((value) =>
         value.outputs.some(
           (output) =>
             output.connector === quickSettingsOutput &&
             output.quickSettingsVisible &&
-            output.quickSettingsPage === "wifi",
+            output.quickSettingsDetail === "wifi",
         )
           ? value
           : null,
       ),
     ),
   )
+  yield* Effect.sleep("250 millis")
   if (available.grim) {
     const quickSettingsWifiScreenshot = yield* runCommand(
       ["grim", "-c", join(artifactDir, "quick-settings-wifi.png")],
@@ -455,12 +478,78 @@ layout {
     )
   }
 
+  const switchQuickSettingsDetail = yield* dbusCall(
+    nestedEnvironment,
+    busName,
+    "OpenQuickSettingsDetail",
+    [quickSettingsOutput, "bluetooth"],
+  )
+  if (!switchQuickSettingsDetail.includes('"ok":true')) {
+    return yield* failure(
+      "assertion",
+      `switching inline quick settings detail failed: ${switchQuickSettingsDetail}`,
+    )
+  }
+  const quickSettingsBluetoothDetail = yield* waitUntilAssertion(
+    "quick settings Bluetooth detail",
+    () =>
+      snapshot(nestedEnvironment, busName, "quick-settings-bluetooth-detail").pipe(
+        Effect.map((value) =>
+          value.outputs.some(
+            (output) =>
+              output.connector === quickSettingsOutput &&
+              output.quickSettingsVisible &&
+              output.quickSettingsDetail === "bluetooth",
+          )
+            ? value
+            : null,
+        ),
+      ),
+  )
+  yield* Effect.sleep("250 millis")
+  if (available.grim) {
+    const quickSettingsBluetoothScreenshot = yield* runCommand(
+      ["grim", "-c", join(artifactDir, "quick-settings-bluetooth.png")],
+      nestedEnvironment,
+    )
+    writeFileSync(
+      join(artifactDir, "quick-settings-bluetooth-grim.log"),
+      quickSettingsBluetoothScreenshot.stdout + quickSettingsBluetoothScreenshot.stderr,
+    )
+  }
+  const closeQuickSettingsDetail = yield* dbusCall(
+    nestedEnvironment,
+    busName,
+    "OpenQuickSettingsDetail",
+    [quickSettingsOutput, ""],
+  )
+  if (!closeQuickSettingsDetail.includes('"ok":true')) {
+    return yield* failure(
+      "assertion",
+      `closing inline quick settings detail failed: ${closeQuickSettingsDetail}`,
+    )
+  }
+  const quickSettingsDetailClosed = yield* waitUntilAssertion("quick settings detail closed", () =>
+    snapshot(nestedEnvironment, busName, "quick-settings-detail-closed").pipe(
+      Effect.map((value) =>
+        value.outputs.some(
+          (output) =>
+            output.connector === quickSettingsOutput &&
+            output.quickSettingsVisible &&
+            output.quickSettingsDetail === null,
+        )
+          ? value
+          : null,
+      ),
+    ),
+  )
+
   const openSettings = yield* runCommand(["gjs", "-m", appBundle, "--settings"], nestedEnvironment)
   writeFileSync(join(artifactDir, "settings-entry.log"), openSettings.stdout + openSettings.stderr)
   if (openSettings.code !== 0) {
     return yield* failure("assertion", `settings command failed: ${openSettings.stderr}`)
   }
-  const settingsVisible = yield* waitUntil("settings window visible", () =>
+  const settingsVisible = yield* waitUntilAssertion("settings window visible", () =>
     snapshot(nestedEnvironment, busName, "settings-visible").pipe(
       Effect.map((value) => (value.settings.visible ? value : null)),
     ),
@@ -471,7 +560,7 @@ layout {
   if (!setOrientation.includes('"ok":true')) {
     return yield* failure("assertion", `SetBarOrientation failed: ${setOrientation}`)
   }
-  const horizontalBars = yield* waitUntil("horizontal setting applied", () =>
+  const horizontalBars = yield* waitUntilAssertion("horizontal setting applied", () =>
     snapshot(nestedEnvironment, busName, "settings-horizontal").pipe(
       Effect.map((value) =>
         value.settings.barOrientation === "horizontal" &&
@@ -480,6 +569,7 @@ layout {
           ? value
           : null,
       ),
+      Effect.catchAll(() => Effect.succeed(null)),
     ),
   )
 
@@ -488,7 +578,7 @@ layout {
     ["zenity", "--info", "--title", "Yates acceptance fixture", "--text", "Fixture window"],
     nestedEnvironment,
   )
-  const popupInput = yield* waitUntil("fixture window in Niri state", () =>
+  const popupInput = yield* waitUntilAssertion("fixture window in Niri state", () =>
     snapshot(nestedEnvironment, busName, "fixture-ready").pipe(
       Effect.map((value) =>
         value.niri.windowIds.length > 0 && value.niri.workspaceIds.length > 0 ? value : null,
@@ -545,11 +635,29 @@ layout {
           (output) => output.connector === quickSettingsOutput && output.quickSettingsVisible,
         ) &&
         quickSettingsVolume.quickSettings.volume === 0.25 &&
-        quickSettingsWifiPage.outputs.some(
+        quickSettingsWifiDetail.outputs.some(
           (output) =>
-            output.connector === quickSettingsOutput && output.quickSettingsPage === "wifi",
+            output.connector === quickSettingsOutput && output.quickSettingsDetail === "wifi",
         ),
-      detail: `connector=${quickSettingsOutput}, volume=${quickSettingsVolume.quickSettings.volume}, page=wifi`,
+      detail: `connector=${quickSettingsOutput}, volume=${quickSettingsVolume.quickSettings.volume}, detail=wifi`,
+    },
+    {
+      name: "quick-settings-inline-detail-transition",
+      ok:
+        quickSettingsBluetoothDetail.outputs.some(
+          (output) =>
+            output.connector === quickSettingsOutput && output.quickSettingsDetail === "bluetooth",
+        ) &&
+        quickSettingsDetailClosed.outputs.some(
+          (output) =>
+            output.connector === quickSettingsOutput &&
+            output.quickSettingsVisible &&
+            output.quickSettingsDetail === null,
+        ) &&
+        popupReset.outputs.every(
+          (output) => !output.quickSettingsVisible && output.quickSettingsDetail === null,
+        ),
+      detail: `connector=${quickSettingsOutput}, switched=bluetooth, closedInline=true, popoverStayedOpen=true, popoverCloseReset=true`,
     },
     {
       name: "settings-command-opens-and-persists-orientation",
@@ -611,6 +719,119 @@ layout {
       ok: true,
       detail: `skipped; optional tools unavailable: ${preflight.optionalUnavailable.join(", ")}`,
     })
+  }
+
+  yield* Effect.promise(() => app.stop())
+  yield* Effect.sleep("100 millis")
+
+  for (const profile of fixtureProfiles) {
+    const profileRunId = `${runId}_${profile.replaceAll("-", "_")}`
+    const profileEnvironment: NodeJS.ProcessEnv = {
+      ...nestedEnvironment,
+      YATES_APPLICATION_ID: `me.pigmint.yates_ui.Acceptance.r${profileRunId.replaceAll(/[^A-Za-z0-9_]/g, "_")}`,
+      YATES_FIXTURE_PROFILE: profile,
+      YATES_RUN_ID: profileRunId,
+    }
+    const profileApp = yield* acquireChild(
+      `app-${profile}`,
+      ["gjs", "-m", appBundle],
+      profileEnvironment,
+    )
+    const profileBusName = `me.pigmint.YatesUi.Debug.r${profileRunId.replaceAll(/[^A-Za-z0-9_]/g, "_")}`
+    const profileReady = yield* waitUntilAssertion(`${profile} fixture ready`, () =>
+      profileApp.process.exitCode !== null || profileApp.process.signalCode !== null
+        ? Effect.fail(failure("assertion", `${profile} fixture exited before debug readiness`))
+        : dbusCall(profileEnvironment, profileBusName, "Ping").pipe(
+            Effect.flatMap(() =>
+              snapshot(profileEnvironment, profileBusName, `profile-${profile}-ready`),
+            ),
+            Effect.map((value) => (value.ready && value.niri.connected ? value : null)),
+            Effect.catchAll(() => Effect.succeed(null)),
+          ),
+    )
+    const profileOutput = profileReady.outputs[0]?.connector
+    if (!profileOutput) {
+      return yield* failure("assertion", `${profile} fixture has no output`)
+    }
+    const profileLayers = yield* waitUntilAssertion(`${profile} fixture layer ownership`, () =>
+      runCommand(["niri", "msg", "-j", "layers"], profileEnvironment).pipe(
+        Effect.map((result) => {
+          if (result.code !== 0) return null
+          const decoded = Schema.decodeUnknownEither(Schema.parseJson(NiriLayers))(result.stdout)
+          if (Either.isLeft(decoded)) return null
+          return assertOneBarPerOutput(
+            profileReady.outputs.map((output) => output.connector),
+            decoded.right,
+          ).ok
+            ? { layers: decoded.right, raw: result.stdout }
+            : null
+        }),
+      ),
+    )
+    writeFileSync(join(artifactDir, `niri-layers-${profile}.json`), profileLayers.raw)
+    const openProfile = yield* dbusCall(profileEnvironment, profileBusName, "OpenQuickSettings", [
+      profileOutput,
+    ])
+    if (!openProfile.includes('"ok":true')) {
+      return yield* failure("assertion", `${profile} OpenQuickSettings failed: ${openProfile}`)
+    }
+    const profileVisible = yield* waitUntilAssertion(`${profile} quick settings visible`, () =>
+      snapshot(profileEnvironment, profileBusName, `profile-${profile}-visible`).pipe(
+        Effect.map((value) =>
+          value.outputs.some(
+            (output) => output.connector === profileOutput && output.quickSettingsVisible,
+          )
+            ? value
+            : null,
+        ),
+      ),
+    )
+    yield* Effect.sleep("250 millis")
+
+    let screenshotOk = true
+    let screenshotDetail = "grim unavailable"
+    if (available.grim) {
+      const screenshotPath = join(artifactDir, `quick-settings-${profile}.png`)
+      const profileScreenshot = yield* runCommand(
+        ["grim", "-c", screenshotPath],
+        profileEnvironment,
+      )
+      writeFileSync(
+        join(artifactDir, `quick-settings-${profile}-grim.log`),
+        profileScreenshot.stdout + profileScreenshot.stderr,
+      )
+      const screenshotBytes =
+        profileScreenshot.code === 0 && existsSync(screenshotPath)
+          ? statSync(screenshotPath).size
+          : 0
+      screenshotOk = profileScreenshot.code === 0 && screenshotBytes > 0
+      screenshotDetail = `path=${screenshotPath}, bytes=${screenshotBytes}`
+    }
+
+    assertions.push({
+      name: `quick-settings-profile-${profile}`,
+      ok:
+        profileVisible.quickSettings.fixtureProfile === profile &&
+        profileVisible.quickSettings.locked === profile.startsWith("lockscreen-") &&
+        profileVisible.outputs.some(
+          (output) => output.connector === profileOutput && output.quickSettingsVisible,
+        ) &&
+        screenshotOk,
+      detail: `profile=${profileVisible.quickSettings.fixtureProfile}, locked=${profileVisible.quickSettings.locked}, capabilities=${profileVisible.quickSettings.availableCapabilities.join(",")}, ${screenshotDetail}`,
+    })
+    assertions.push(
+      assertFixtureProfileCapabilities(profile, profileVisible.quickSettings.availableCapabilities),
+    )
+    const profileLayerAssertion = assertOneBarPerOutput(
+      profileReady.outputs.map((output) => output.connector),
+      profileLayers.layers,
+    )
+    assertions.push({
+      ...profileLayerAssertion,
+      name: `quick-settings-profile-layer-${profile}`,
+    })
+    yield* Effect.promise(() => profileApp.stop())
+    yield* Effect.sleep("100 millis")
   }
 
   const failed = assertions.filter((assertion) => !assertion.ok)
@@ -759,6 +980,7 @@ writeFileSync(
       mode: "nested-niri",
       isolatedDbus: true,
       fixtureMode: true,
+      fixtureProfiles,
       debug: true,
       liveSessionMutations: [],
     },

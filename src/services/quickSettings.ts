@@ -9,11 +9,24 @@ import GLib from "gi://GLib"
 import { Effect, Schema } from "effect"
 
 import { diagnosticLog } from "../debug/log"
+import { AutoRotateController, createAutoRotateController } from "./quickSettings/autoRotate"
+import { readBacklightSnapshot, setBacklight } from "./quickSettings/backlight"
 import {
+  SavedConnectionKind,
+  SavedConnectionSnapshot,
+  readNetworkManagerSnapshot,
+  toggleSavedConnection,
+  unavailableNetworkManagerSnapshot,
+  watchNetworkManager,
+} from "./quickSettings/networkManager"
+import { createSessionController } from "./quickSettings/session"
+import {
+  ConnectionPresentation,
   QuickSettingsAction,
+  QuickSettingsFixtureProfile,
   QuickSettingsModule,
+  QuickSettingsPending,
   QuickSettingsState,
-  SessionAction,
   createFixtureQuickSettingsModule,
 } from "./quickSettingsModel"
 
@@ -32,6 +45,11 @@ function unavailableState(): QuickSettingsState {
       percentage: 0,
       iconName: "battery-missing-symbolic",
       charging: false,
+    },
+    brightness: {
+      available: false,
+      value: 0,
+      iconName: "display-brightness-symbolic",
     },
     audio: {
       available: false,
@@ -52,8 +70,31 @@ function unavailableState(): QuickSettingsState {
     },
     wired: {
       available: false,
-      connected: false,
+      enabled: false,
+      activeConnectionId: null,
       iconName: "network-wired-disconnected-symbolic",
+      connections: [],
+    },
+    vpn: {
+      available: false,
+      enabled: false,
+      activeConnectionIds: [],
+      iconName: "network-vpn-symbolic",
+      connections: [],
+    },
+    mobile: {
+      available: false,
+      enabled: false,
+      activeConnectionIds: [],
+      iconName: "network-cellular-offline-symbolic",
+      connections: [],
+    },
+    bluetoothTether: {
+      available: false,
+      enabled: false,
+      activeConnectionIds: [],
+      iconName: "network-cellular-symbolic",
+      connections: [],
     },
     bluetooth: {
       available: false,
@@ -68,15 +109,28 @@ function unavailableState(): QuickSettingsState {
     },
     darkMode: { available: false, enabled: false },
     nightLight: { available: false, enabled: false },
+    airplaneMode: { available: false, enabled: false },
+    autoRotate: { available: false, enabled: false },
+    backgroundApps: { available: false, apps: [] },
+    privacy: {
+      microphone: false,
+      camera: false,
+      location: false,
+      screenRecording: { active: false, elapsedSeconds: 0 },
+      casts: [],
+    },
     session: {
       screenshot: false,
       lock: false,
       suspend: false,
       reboot: false,
       powerOff: false,
+      logOut: false,
+      switchUser: false,
+      locked: false,
     },
-    pendingAction: null,
-    errorMessage: null,
+    pending: null,
+    error: null,
   }
 }
 
@@ -113,13 +167,100 @@ function actionError(operation: string) {
   return (cause: unknown) => QuickSettingsActionError.make({ operation, cause })
 }
 
+function runCleanups(operation: string, cleanups: ReadonlyArray<() => void>): void {
+  for (const cleanup of cleanups) {
+    Effect.runSync(
+      Effect.try({ try: cleanup, catch: actionError(operation) }).pipe(
+        Effect.catchTag("QuickSettingsActionError", (error) =>
+          Effect.sync(() => {
+            diagnosticLog("quick-settings.cleanup.failed", {
+              operation: error.operation,
+              error: String(error.cause),
+            })
+          }),
+        ),
+      ),
+    )
+  }
+}
+
 function canLogindAction(answer: string): boolean {
   return answer === "yes" || answer === "challenge"
 }
 
-function createLiveQuickSettingsModule(): QuickSettingsModule {
+function connectionIcon(kind: SavedConnectionKind, connected: boolean): string {
+  switch (kind) {
+    case "wired":
+      return connected ? "network-wired-symbolic" : "network-wired-disconnected-symbolic"
+    case "vpn":
+      return "network-vpn-symbolic"
+    case "mobile":
+      return connected
+        ? "network-cellular-signal-excellent-symbolic"
+        : "network-cellular-offline-symbolic"
+    case "bluetooth-tether":
+      return "network-cellular-symbolic"
+  }
+}
+
+function connectionPresentation(
+  kind: SavedConnectionKind,
+  connection: SavedConnectionSnapshot,
+): ConnectionPresentation {
+  return {
+    id: connection.id,
+    name: connection.name,
+    iconName: connectionIcon(kind, connection.active),
+    connected: connection.active,
+    subtitle: null,
+  }
+}
+
+function connectionPresentations(
+  kind: SavedConnectionKind,
+  connections: ReadonlyArray<SavedConnectionSnapshot>,
+): ReadonlyArray<ConnectionPresentation> {
+  return connections.slice(0, 8).map((connection) => connectionPresentation(kind, connection))
+}
+
+function actionTarget(action: QuickSettingsAction): string | null {
+  switch (action.type) {
+    case "select-audio-output":
+    case "connect-wifi":
+    case "toggle-wired-connection":
+    case "toggle-vpn":
+    case "toggle-mobile-connection":
+    case "toggle-bluetooth-tether":
+    case "toggle-bluetooth-device":
+    case "set-power-profile":
+    case "stop-background-app":
+    case "stop-cast":
+      return action.id
+    case "session":
+      return action.action
+    default:
+      return null
+  }
+}
+
+function fixtureProfile(value: string | null): QuickSettingsFixtureProfile {
+  switch (value) {
+    case "desktop":
+    case "complex":
+    case "lockscreen-laptop":
+    case "lockscreen-desktop":
+    case "empty-states":
+    case "laptop":
+      return value
+    default:
+      return "laptop"
+  }
+}
+
+function createLiveQuickSettingsModule(niriSocketPath: string | null): QuickSettingsModule {
   const battery = Battery.Device.get_default()
   const network = Network.get_default()
+  const networkClient: ReturnType<typeof network.get_client> | null = network.client
   const bluetooth = Bluetooth.get_default()
   const wp = Wp.get_default()
   const audio = wp.audio
@@ -130,6 +271,13 @@ function createLiveQuickSettingsModule(): QuickSettingsModule {
   const sessionId = GLib.getenv("XDG_SESSION_ID")
   const cancellable = new Gio.Cancellable()
   let systemBus: Gio.DBusConnection | null = null
+  let sessionLocked = false
+  let airplaneRestore: {
+    readonly wifi: boolean | null
+    readonly wwan: boolean | null
+    readonly bluetooth: boolean | null
+  } | null = null
+  let applyingAirplaneMode = false
   let stopped = false
   let state = unavailableState()
   const listeners = new Set<(next: QuickSettingsState) => void>()
@@ -138,6 +286,11 @@ function createLiveQuickSettingsModule(): QuickSettingsModule {
   let speakerDisconnectors: Array<() => void> = []
   let outputDisconnectors: Array<() => void> = []
   let bluetoothDeviceDisconnectors: Array<() => void> = []
+  let logindSubscription = 0
+  let backlightTimer = 0
+  let sessionController: ReturnType<typeof createSessionController> | null = null
+  let autoRotateController: AutoRotateController | null = null
+  let actionSequence = 0
 
   const publish = (next: QuickSettingsState): void => {
     if (stopped) return
@@ -151,7 +304,12 @@ function createLiveQuickSettingsModule(): QuickSettingsModule {
     const seenWifiNames = new Set<string>()
     const wifiNetworks = (wifi?.get_access_points() ?? [])
       .filter((accessPoint) => accessPoint.ssid !== null)
-      .sort((left, right) => right.strength - left.strength)
+      .sort((left, right) => {
+        const leftActive = left.bssid === activeAccessPoint?.bssid
+        const rightActive = right.bssid === activeAccessPoint?.bssid
+        if (leftActive !== rightActive) return leftActive ? -1 : 1
+        return right.strength - left.strength
+      })
       .filter((accessPoint) => {
         const name = accessPoint.ssid
         if (name === null || seenWifiNames.has(name)) return false
@@ -164,7 +322,9 @@ function createLiveQuickSettingsModule(): QuickSettingsModule {
         iconName: accessPoint.iconName,
         secure: accessPoint.requiresPassword,
         known: accessPoint.get_connections().length > 0,
+        strength: accessPoint.strength,
       }))
+      .slice(0, 8)
     const speaker = audio.defaultSpeaker
     const outputs = (audio.get_speakers() ?? []).map((output) => ({
       id: String(output.id),
@@ -191,6 +351,46 @@ function createLiveQuickSettingsModule(): QuickSettingsModule {
       label: profileLabel(profile.profile),
       iconName: profileIcon(profile.profile),
     }))
+    const networkManager =
+      networkClient === null
+        ? unavailableNetworkManagerSnapshot
+        : readNetworkManagerSnapshot(networkClient)
+    const backlight = readBacklightSnapshot()
+    const sessionCapabilities = sessionController?.snapshot() ?? {
+      logOut: sessionId !== null,
+      switchUser: false,
+    }
+    const bluetoothAvailable = bluetooth.adapter !== null
+    const radios: ReadonlyArray<boolean> = [
+      ...(networkManager.running && networkManager.wifiAvailable
+        ? [networkManager.wifiEnabled]
+        : []),
+      ...(networkManager.running && networkManager.wwanAvailable
+        ? [networkManager.wwanEnabled]
+        : []),
+      ...(bluetoothAvailable ? [bluetooth.isPowered] : []),
+    ]
+    const airplaneEnabled = radios.length > 0 && radios.every((enabled) => !enabled)
+    if (airplaneRestore !== null && !applyingAirplaneMode && !airplaneEnabled) {
+      airplaneRestore = null
+    }
+    const wiredConnections = connectionPresentations("wired", networkManager.wired)
+    const vpnConnections = connectionPresentations("vpn", networkManager.vpn)
+    const mobileConnections = connectionPresentations("mobile", networkManager.mobile)
+    const tetherConnections = connectionPresentations(
+      "bluetooth-tether",
+      networkManager.bluetoothTether,
+    )
+    const activeWired = wiredConnections.find((connection) => connection.connected) ?? null
+    const activeVpnIds = vpnConnections
+      .filter((connection) => connection.connected)
+      .map((connection) => connection.id)
+    const activeMobileIds = mobileConnections
+      .filter((connection) => connection.connected)
+      .map((connection) => connection.id)
+    const activeTetherIds = tetherConnections
+      .filter((connection) => connection.connected)
+      .map((connection) => connection.id)
 
     return {
       battery: {
@@ -198,6 +398,11 @@ function createLiveQuickSettingsModule(): QuickSettingsModule {
         percentage: battery?.percentage ?? 0,
         iconName: battery?.batteryIconName ?? "battery-missing-symbolic",
         charging: battery?.charging ?? false,
+      },
+      brightness: {
+        available: backlight.available && systemBus !== null,
+        value: backlight.value,
+        iconName: "display-brightness-symbolic",
       },
       audio: {
         available: Boolean(wp.connected && speaker),
@@ -208,7 +413,7 @@ function createLiveQuickSettingsModule(): QuickSettingsModule {
         outputs,
       },
       wifi: {
-        available: wifi !== null,
+        available: networkManager.running && wifi !== null,
         enabled: wifi?.enabled ?? false,
         activeNetworkId: activeAccessPoint?.bssid ?? null,
         activeNetworkName: activeAccessPoint?.ssid ?? null,
@@ -217,9 +422,40 @@ function createLiveQuickSettingsModule(): QuickSettingsModule {
         networks: wifiNetworks,
       },
       wired: {
-        available: network.wired !== null,
-        connected: network.primary === Network.Primary.WIRED,
-        iconName: network.wired?.iconName ?? "network-wired-disconnected-symbolic",
+        available:
+          networkManager.running && (network.wired !== null || wiredConnections.length > 0),
+        enabled: activeWired !== null,
+        activeConnectionId: activeWired?.id ?? null,
+        iconName:
+          activeWired !== null
+            ? "network-wired-symbolic"
+            : (network.wired?.iconName ?? "network-wired-disconnected-symbolic"),
+        connections: wiredConnections,
+      },
+      vpn: {
+        available: networkManager.running && vpnConnections.length > 0,
+        enabled: activeVpnIds.length > 0,
+        activeConnectionIds: activeVpnIds,
+        iconName: "network-vpn-symbolic",
+        connections: vpnConnections,
+      },
+      mobile: {
+        available: networkManager.running && networkManager.wwanAvailable,
+        enabled: networkManager.wwanEnabled,
+        activeConnectionIds: activeMobileIds,
+        iconName:
+          activeMobileIds.length > 0
+            ? "network-cellular-signal-excellent-symbolic"
+            : "network-cellular-offline-symbolic",
+        connections: mobileConnections,
+      },
+      bluetoothTether: {
+        available:
+          networkManager.running && networkManager.bluetoothTetherAvailable && bluetoothAvailable,
+        enabled: bluetooth.isPowered,
+        activeConnectionIds: activeTetherIds,
+        iconName: "network-cellular-symbolic",
+        connections: tetherConnections,
       },
       bluetooth: {
         available: bluetooth.adapter !== null,
@@ -240,9 +476,22 @@ function createLiveQuickSettingsModule(): QuickSettingsModule {
         available: color?.is_writable("night-light-enabled") ?? false,
         enabled: color?.get_boolean("night-light-enabled") ?? false,
       },
-      session: state.session,
-      pendingAction: state.pendingAction,
-      errorMessage: state.errorMessage,
+      airplaneMode: {
+        available: radios.length > 0,
+        enabled: airplaneEnabled,
+      },
+      autoRotate: autoRotateController?.snapshot() ?? state.autoRotate,
+      backgroundApps: state.backgroundApps,
+      privacy: state.privacy,
+      session: {
+        ...state.session,
+        lock: systemBus !== null && sessionId !== null,
+        logOut: systemBus !== null && sessionCapabilities.logOut,
+        switchUser: systemBus !== null && sessionCapabilities.switchUser,
+        locked: sessionLocked,
+      },
+      pending: state.pending,
+      error: state.error,
     }
   }
 
@@ -267,7 +516,7 @@ function createLiveQuickSettingsModule(): QuickSettingsModule {
   }
 
   const reconnectWifi = (): void => {
-    for (const disconnect of wifiDisconnectors) disconnect()
+    runCleanups("wifi-signals", wifiDisconnectors)
     wifiDisconnectors = []
     const wifi = network.wifi
     if (!wifi) return
@@ -283,8 +532,8 @@ function createLiveQuickSettingsModule(): QuickSettingsModule {
   }
 
   const reconnectAudio = (): void => {
-    for (const disconnect of speakerDisconnectors) disconnect()
-    for (const disconnect of outputDisconnectors) disconnect()
+    runCleanups("speaker-signals", speakerDisconnectors)
+    runCleanups("audio-output-signals", outputDisconnectors)
     speakerDisconnectors = []
     outputDisconnectors = []
     const speaker = audio.defaultSpeaker
@@ -307,7 +556,7 @@ function createLiveQuickSettingsModule(): QuickSettingsModule {
   }
 
   const reconnectBluetoothDevices = (): void => {
-    for (const disconnect of bluetoothDeviceDisconnectors) disconnect()
+    runCleanups("bluetooth-device-signals", bluetoothDeviceDisconnectors)
     bluetoothDeviceDisconnectors = []
     for (const device of bluetooth.devices) {
       const signals = [
@@ -321,11 +570,14 @@ function createLiveQuickSettingsModule(): QuickSettingsModule {
   }
 
   const runAction = (
-    operation: string,
+    action: QuickSettingsAction,
     effect: Effect.Effect<void, QuickSettingsActionError>,
   ): void => {
-    if (stopped || state.pendingAction !== null) return
-    publish({ ...state, pendingAction: operation, errorMessage: null })
+    if (stopped) return
+    const pending: QuickSettingsPending = { kind: action.type, targetId: actionTarget(action) }
+    if (state.pending?.kind === pending.kind && state.pending.targetId === pending.targetId) return
+    const sequence = ++actionSequence
+    publish({ ...state, pending, error: null })
     void Effect.runPromise(
       effect.pipe(
         Effect.match({
@@ -334,28 +586,34 @@ function createLiveQuickSettingsModule(): QuickSettingsModule {
               operation: error.operation,
               error: String(error.cause),
             })
+            if (sequence !== actionSequence) return
             publish({
               ...state,
-              pendingAction: null,
-              errorMessage: `${error.operation} failed: ${String(error.cause)}`,
+              pending: null,
+              error: {
+                ...pending,
+                message: `Unable to complete ${error.operation}`,
+              },
             })
           },
           onSuccess: () => {
             refresh()
-            publish({ ...state, pendingAction: null, errorMessage: null })
+            if (sequence === actionSequence) publish({ ...state, pending: null, error: null })
           },
         }),
       ),
     )
   }
 
-  const syncAction = (operation: string, perform: () => void): void => {
+  const syncAction = (action: QuickSettingsAction, perform: () => void): void => {
     if (stopped) return
-    publish({ ...state, pendingAction: operation, errorMessage: null })
+    actionSequence += 1
+    const pending: QuickSettingsPending = { kind: action.type, targetId: actionTarget(action) }
+    publish({ ...state, pending, error: null })
     Effect.runSync(
       Effect.try({
         try: perform,
-        catch: actionError(operation),
+        catch: actionError(action.type),
       }).pipe(
         Effect.match({
           onFailure: (error) => {
@@ -365,25 +623,28 @@ function createLiveQuickSettingsModule(): QuickSettingsModule {
             })
             publish({
               ...state,
-              pendingAction: null,
-              errorMessage: `${error.operation} failed: ${String(error.cause)}`,
+              pending: null,
+              error: {
+                ...pending,
+                message: `Unable to complete ${error.operation}`,
+              },
             })
           },
           onSuccess: () => {
             refresh()
-            publish({ ...state, pendingAction: null, errorMessage: null })
+            publish({ ...state, pending: null, error: null })
           },
         }),
       ),
     )
   }
 
-  const promiseAction = (operation: string, perform: () => Promise<unknown>): void =>
+  const promiseAction = (action: QuickSettingsAction, perform: () => Promise<unknown>): void =>
     runAction(
-      operation,
+      action,
       Effect.tryPromise({
         try: () => perform().then(() => undefined),
-        catch: actionError(operation),
+        catch: actionError(action.type),
       }),
     )
 
@@ -402,16 +663,37 @@ function createLiveQuickSettingsModule(): QuickSettingsModule {
     )
   }
 
-  const dispatchSession = (action: SessionAction): void => {
+  const dispatchSession = (
+    request: Extract<QuickSettingsAction, { readonly type: "session" }>,
+  ): void => {
+    const action = request.action
     const available =
       action === "power-off"
         ? state.session.powerOff
         : action === "reboot"
           ? state.session.reboot
-          : state.session.suspend
+          : action === "suspend"
+            ? state.session.suspend
+            : action === "log-out"
+              ? state.session.logOut
+              : state.session.switchUser
     if (!available) return
+    if (action === "log-out") {
+      const bus = systemBus
+      const controller = sessionController
+      if (!bus || !controller) return
+      promiseAction(request, () => controller.logOut(bus, cancellable))
+      return
+    }
+    if (action === "switch-user") {
+      const bus = systemBus
+      const controller = sessionController
+      if (!bus || !controller) return
+      promiseAction(request, () => controller.switchUser(bus, cancellable))
+      return
+    }
     const method = action === "power-off" ? "PowerOff" : action === "reboot" ? "Reboot" : "Suspend"
-    promiseAction(action, () => callLogind(method, new GLib.Variant("(b)", [true])))
+    promiseAction(request, () => callLogind(method, new GLib.Variant("(b)", [true])))
   }
 
   const dispatch = (action: QuickSettingsAction): void => {
@@ -419,7 +701,19 @@ function createLiveQuickSettingsModule(): QuickSettingsModule {
       case "set-volume": {
         const speaker = audio.defaultSpeaker
         if (!speaker) return
-        syncAction(action.type, () => speaker.set_volume(Math.max(0, Math.min(1, action.value))))
+        syncAction(action, () => speaker.set_volume(Math.max(0, Math.min(1, action.value))))
+        return
+      }
+      case "toggle-mute": {
+        const speaker = audio.defaultSpeaker
+        if (!speaker) return
+        syncAction(action, () => speaker.set_mute(!speaker.mute))
+        return
+      }
+      case "set-brightness": {
+        const bus = systemBus
+        if (!bus || !state.brightness.available) return
+        promiseAction(action, () => setBacklight(bus, action.value, cancellable))
         return
       }
       case "select-audio-output": {
@@ -427,19 +721,19 @@ function createLiveQuickSettingsModule(): QuickSettingsModule {
           (candidate) => String(candidate.id) === action.id,
         )
         if (!output) return
-        syncAction(action.type, () => output.set_is_default(true))
+        syncAction(action, () => output.set_is_default(true))
         return
       }
       case "toggle-wifi": {
         const wifi = network.wifi
         if (!wifi) return
-        syncAction(action.type, () => wifi.set_enabled(!wifi.enabled))
+        syncAction(action, () => wifi.set_enabled(!wifi.enabled))
         return
       }
       case "scan-wifi": {
         const wifi = network.wifi
         if (!wifi || !wifi.enabled) return
-        syncAction(action.type, () => wifi.scan())
+        syncAction(action, () => wifi.scan())
         return
       }
       case "connect-wifi": {
@@ -450,34 +744,74 @@ function createLiveQuickSettingsModule(): QuickSettingsModule {
         if (accessPoint.requiresPassword && accessPoint.get_connections().length === 0) {
           publish({
             ...state,
-            errorMessage: "Open Network Settings to connect to a new secured network",
+            error: {
+              kind: action.type,
+              targetId: action.id,
+              message: "Open Network Settings to connect to a new secured network",
+            },
           })
           return
         }
-        promiseAction(action.type, () => accessPoint.activate(null))
+        promiseAction(action, () => accessPoint.activate(null))
         return
       }
+      case "toggle-wired-connection":
+        if (networkClient === null) return
+        if (!state.wired.connections.some((connection) => connection.id === action.id)) return
+        promiseAction(action, () =>
+          toggleSavedConnection(networkClient, "wired", action.id, cancellable),
+        )
+        return
+      case "toggle-vpn":
+        if (networkClient === null) return
+        if (!state.vpn.connections.some((connection) => connection.id === action.id)) return
+        promiseAction(action, () =>
+          toggleSavedConnection(networkClient, "vpn", action.id, cancellable),
+        )
+        return
+      case "toggle-mobile-connection":
+        if (networkClient === null) return
+        if (
+          !state.mobile.enabled ||
+          !state.mobile.connections.some((connection) => connection.id === action.id)
+        )
+          return
+        promiseAction(action, () =>
+          toggleSavedConnection(networkClient, "mobile", action.id, cancellable),
+        )
+        return
+      case "toggle-bluetooth-tether":
+        if (networkClient === null) return
+        if (
+          !bluetooth.isPowered ||
+          !state.bluetoothTether.connections.some((connection) => connection.id === action.id)
+        )
+          return
+        promiseAction(action, () =>
+          toggleSavedConnection(networkClient, "bluetooth-tether", action.id, cancellable),
+        )
+        return
       case "toggle-bluetooth": {
         const adapter = bluetooth.adapter
         if (!adapter) return
-        syncAction(action.type, () => adapter.set_powered(!adapter.powered))
+        syncAction(action, () => adapter.set_powered(!adapter.powered))
         return
       }
       case "toggle-bluetooth-device": {
         const device = bluetooth.devices.find((candidate) => candidate.address === action.id)
         if (!device || !bluetooth.isPowered || !device.paired) return
-        promiseAction(action.type, () =>
+        promiseAction(action, () =>
           device.connected ? device.disconnect_device() : device.connect_device(),
         )
         return
       }
       case "set-power-profile":
         if (!powerProfiles.get_profiles().some((profile) => profile.profile === action.id)) return
-        syncAction(action.type, () => powerProfiles.set_active_profile(action.id))
+        syncAction(action, () => powerProfiles.set_active_profile(action.id))
         return
       case "set-dark-mode":
         if (!appearance?.is_writable("color-scheme")) return
-        syncAction(action.type, () => {
+        syncAction(action, () => {
           if (!appearance.set_string("color-scheme", action.enabled ? "prefer-dark" : "default")) {
             throw new Error("color-scheme was not changed")
           }
@@ -485,11 +819,73 @@ function createLiveQuickSettingsModule(): QuickSettingsModule {
         return
       case "set-night-light":
         if (!color?.is_writable("night-light-enabled")) return
-        syncAction(action.type, () => {
+        syncAction(action, () => {
           if (!color.set_boolean("night-light-enabled", action.enabled)) {
             throw new Error("night-light-enabled was not changed")
           }
         })
+        return
+      case "set-airplane-mode": {
+        if (networkClient === null && bluetooth.adapter === null) return
+        if (!state.airplaneMode.available || state.airplaneMode.enabled === action.enabled) return
+        syncAction(action, () => {
+          const networkManager =
+            networkClient === null
+              ? unavailableNetworkManagerSnapshot
+              : readNetworkManagerSnapshot(networkClient)
+          const adapter = bluetooth.adapter
+          applyingAirplaneMode = true
+          try {
+            if (action.enabled) {
+              airplaneRestore = {
+                wifi:
+                  networkManager.running && networkManager.wifiAvailable
+                    ? networkManager.wifiEnabled
+                    : null,
+                wwan:
+                  networkManager.running && networkManager.wwanAvailable
+                    ? networkManager.wwanEnabled
+                    : null,
+                bluetooth: adapter !== null ? adapter.powered : null,
+              }
+              if (networkManager.running && networkManager.wifiAvailable) {
+                if (networkClient !== null) networkClient.wireless_enabled = false
+              }
+              if (networkManager.running && networkManager.wwanAvailable) {
+                if (networkClient !== null) networkClient.wwan_enabled = false
+              }
+              if (adapter !== null) adapter.set_powered(false)
+            } else {
+              const restore = airplaneRestore
+              if (networkManager.running && networkManager.wifiAvailable) {
+                if (networkClient !== null) networkClient.wireless_enabled = restore?.wifi ?? true
+              }
+              if (networkManager.running && networkManager.wwanAvailable) {
+                if (networkClient !== null) networkClient.wwan_enabled = restore?.wwan ?? true
+              }
+              if (adapter !== null) adapter.set_powered(restore?.bluetooth ?? true)
+              airplaneRestore = null
+            }
+          } finally {
+            applyingAirplaneMode = false
+          }
+        })
+        return
+      }
+      case "set-auto-rotate": {
+        const controller = autoRotateController
+        if (
+          !controller ||
+          !state.autoRotate.available ||
+          state.autoRotate.enabled === action.enabled
+        )
+          return
+        promiseAction(action, () => controller.setEnabled(action.enabled))
+        return
+      }
+      case "stop-background-app":
+      case "stop-screen-recording":
+      case "stop-cast":
         return
       case "take-screenshot": {
         if (!screenshotProgram) return
@@ -497,7 +893,7 @@ function createLiveQuickSettingsModule(): QuickSettingsModule {
           GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_PICTURES) ?? GLib.get_home_dir()
         const filename = `Screenshot-${new Date().toISOString().replaceAll(/[:.]/g, "-")}.png`
         const path = GLib.build_filenamev([directory, filename])
-        promiseAction(action.type, () => {
+        promiseAction(action, () => {
           GLib.mkdir_with_parents(directory, 0o755)
           return Gio.Subprocess.new(
             [screenshotProgram, path],
@@ -508,16 +904,36 @@ function createLiveQuickSettingsModule(): QuickSettingsModule {
       }
       case "lock":
         if (!sessionId) return
-        promiseAction(action.type, () =>
-          callLogind("LockSession", new GLib.Variant("(s)", [sessionId])),
-        )
+        promiseAction(action, () => callLogind("LockSession", new GLib.Variant("(s)", [sessionId])))
         return
       case "session":
-        dispatchSession(action.action)
+        dispatchSession(action)
         return
       case "clear-error":
-        publish({ ...state, errorMessage: null })
+        publish({ ...state, error: null })
     }
+  }
+
+  sessionController = Effect.runSync(
+    Effect.try({
+      try: () => createSessionController(refresh),
+      catch: actionError("accounts-service"),
+    }).pipe(
+      Effect.match({
+        onFailure: (error) => {
+          diagnosticLog("quick-settings.accounts-service.unavailable", {
+            operation: error.operation,
+            error: String(error.cause),
+          })
+          return null
+        },
+        onSuccess: (controller) => controller,
+      }),
+    ),
+  )
+  if (networkClient !== null) {
+    const networkManagerSignals = watchNetworkManager(networkClient, refresh)
+    disconnectors.push(networkManagerSignals.stop)
   }
 
   const networkSignal = network.connect("notify::wifi", () => {
@@ -600,6 +1016,10 @@ function createLiveQuickSettingsModule(): QuickSettingsModule {
   reconnectAudio()
   reconnectBluetoothDevices()
   refresh()
+  backlightTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, () => {
+    refresh()
+    return GLib.SOURCE_CONTINUE
+  })
   publish({
     ...state,
     session: {
@@ -630,13 +1050,120 @@ function createLiveQuickSettingsModule(): QuickSettingsModule {
     return canLogindAction(reply.get_child_value(0).get_string()[0])
   })
 
+  const querySessionLocked = Effect.fn("quick-settings.query-session-locked")(function* (
+    bus: Gio.DBusConnection,
+    sessionPath: string,
+  ) {
+    const reply = yield* Effect.tryPromise({
+      try: () =>
+        bus.call(
+          "org.freedesktop.login1",
+          sessionPath,
+          "org.freedesktop.DBus.Properties",
+          "Get",
+          new GLib.Variant("(ss)", ["org.freedesktop.login1.Session", "LockedHint"]),
+          new GLib.VariantType("(v)"),
+          Gio.DBusCallFlags.NONE,
+          -1,
+          cancellable,
+        ),
+      catch: actionError("query-session-locked"),
+    })
+    return reply.get_child_value(0).get_variant().get_boolean()
+  })
+
+  const refreshSessionLocked = (bus: Gio.DBusConnection, sessionPath: string): void => {
+    void Effect.runPromise(
+      querySessionLocked(bus, sessionPath).pipe(
+        Effect.match({
+          onFailure: (error) => {
+            diagnosticLog("quick-settings.session-state.unavailable", {
+              operation: error.operation,
+              error: String(error.cause),
+            })
+          },
+          onSuccess: (locked) => {
+            if (stopped) return
+            sessionLocked = locked
+            refresh()
+          },
+        }),
+      ),
+    )
+  }
+
+  const querySessionPath = Effect.fn("quick-settings.query-session-path")(function* (
+    bus: Gio.DBusConnection,
+    id: string,
+  ) {
+    const reply = yield* Effect.tryPromise({
+      try: () =>
+        bus.call(
+          "org.freedesktop.login1",
+          "/org/freedesktop/login1",
+          "org.freedesktop.login1.Manager",
+          "GetSession",
+          new GLib.Variant("(s)", [id]),
+          new GLib.VariantType("(o)"),
+          Gio.DBusCallFlags.NONE,
+          -1,
+          cancellable,
+        ),
+      catch: actionError("query-session-path"),
+    })
+    return reply.get_child_value(0).get_string()[0]
+  })
+
   void Effect.runPromise(
     Effect.gen(function* () {
       const bus = yield* Effect.tryPromise({
         try: () => Gio.bus_get(Gio.BusType.SYSTEM, cancellable),
         catch: actionError("connect-logind"),
       })
+      if (stopped) return
       systemBus = bus
+      autoRotateController = yield* Effect.tryPromise({
+        try: () =>
+          createAutoRotateController({
+            systemBus: bus,
+            niriSocketPath,
+            cancellable,
+            onChanged: refresh,
+            onBackgroundError: (cause) => {
+              diagnosticLog("quick-settings.auto-rotate.failed", { error: String(cause) })
+            },
+          }),
+        catch: actionError("auto-rotate"),
+      }).pipe(
+        Effect.catchTag("QuickSettingsActionError", (error) =>
+          Effect.sync(() => {
+            diagnosticLog("quick-settings.auto-rotate.unavailable", {
+              operation: error.operation,
+              error: String(error.cause),
+            })
+            return null
+          }),
+        ),
+      )
+      refresh()
+      const sessionPath =
+        sessionId === null
+          ? "/org/freedesktop/login1/session/auto"
+          : yield* querySessionPath(bus, sessionId).pipe(
+              Effect.catchTag("QuickSettingsActionError", () =>
+                Effect.succeed("/org/freedesktop/login1/session/auto"),
+              ),
+            )
+      logindSubscription = bus.signal_subscribe(
+        "org.freedesktop.login1",
+        "org.freedesktop.DBus.Properties",
+        "PropertiesChanged",
+        sessionPath,
+        "org.freedesktop.login1.Session",
+        Gio.DBusSignalFlags.NONE,
+        () => refreshSessionLocked(bus, sessionPath),
+      )
+      refreshSessionLocked(bus, sessionPath)
       const suspend = yield* queryCapability(bus, "CanSuspend")
       const reboot = yield* queryCapability(bus, "CanReboot")
       const powerOff = yield* queryCapability(bus, "CanPowerOff")
@@ -648,6 +1175,8 @@ function createLiveQuickSettingsModule(): QuickSettingsModule {
           suspend,
           reboot,
           powerOff,
+          logOut: sessionController?.snapshot().logOut ?? false,
+          switchUser: sessionController?.snapshot().switchUser ?? false,
         },
       })
     }).pipe(
@@ -673,17 +1202,36 @@ function createLiveQuickSettingsModule(): QuickSettingsModule {
     stop: () => {
       if (stopped) return
       stopped = true
+      if (backlightTimer !== 0) {
+        GLib.source_remove(backlightTimer)
+        backlightTimer = 0
+      }
+      if (systemBus !== null && logindSubscription !== 0) {
+        systemBus.signal_unsubscribe(logindSubscription)
+        logindSubscription = 0
+      }
+      if (autoRotateController !== null) {
+        runCleanups("auto-rotate", [autoRotateController.stop])
+        autoRotateController = null
+      }
       cancellable.cancel()
-      for (const disconnect of wifiDisconnectors) disconnect()
-      for (const disconnect of speakerDisconnectors) disconnect()
-      for (const disconnect of outputDisconnectors) disconnect()
-      for (const disconnect of bluetoothDeviceDisconnectors) disconnect()
-      for (const disconnect of disconnectors) disconnect()
+      runCleanups("wifi-signals", wifiDisconnectors)
+      runCleanups("speaker-signals", speakerDisconnectors)
+      runCleanups("audio-output-signals", outputDisconnectors)
+      runCleanups("bluetooth-device-signals", bluetoothDeviceDisconnectors)
+      runCleanups("service-signals", disconnectors)
+      if (sessionController !== null)
+        runCleanups("accounts-service-signals", [sessionController.stop])
       listeners.clear()
     },
   }
 }
 
-export function createQuickSettingsModule(fixtureMode: boolean): QuickSettingsModule {
-  return fixtureMode ? createFixtureQuickSettingsModule() : createLiveQuickSettingsModule()
+export function createQuickSettingsModule(
+  fixtureMode: boolean,
+  niriSocketPath: string | null = GLib.getenv("NIRI_SOCKET"),
+): QuickSettingsModule {
+  return fixtureMode
+    ? createFixtureQuickSettingsModule(fixtureProfile(GLib.getenv("YATES_FIXTURE_PROFILE")))
+    : createLiveQuickSettingsModule(niriSocketPath)
 }

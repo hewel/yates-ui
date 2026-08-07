@@ -2,6 +2,34 @@ import { Either, Schema } from "effect"
 
 const Point = Schema.Tuple(Schema.Number, Schema.Number)
 
+export type NiriOutputTransform = "Normal" | "90" | "180" | "270"
+
+const NiriOutputTransformSchema = Schema.Literal("Normal", "90", "180", "270")
+const NiriOutputReplyValue = Schema.Struct({
+  name: Schema.String,
+  logical: Schema.NullOr(
+    Schema.Struct({
+      transform: NiriOutputTransformSchema,
+    }),
+  ),
+})
+const NiriOutputsReply = Schema.Struct({
+  Ok: Schema.Struct({
+    Outputs: Schema.Record({ key: Schema.String, value: NiriOutputReplyValue }),
+  }),
+})
+const NiriOutputConfigReply = Schema.Struct({
+  Ok: Schema.Struct({
+    OutputConfigChanged: Schema.Literal("Applied", "OutputWasMissing"),
+  }),
+})
+
+export interface NiriOutputSnapshot {
+  readonly connector: string
+  readonly name: string
+  readonly transform: NiriOutputTransform | null
+}
+
 export class NiriWorkspace extends Schema.Class<NiriWorkspace>("NiriWorkspace")({
   id: Schema.Number,
   idx: Schema.Number,
@@ -33,6 +61,24 @@ export class NiriWindow extends Schema.Class<NiriWindow>("NiriWindow")({
   layout: Schema.optional(Schema.NullOr(NiriWindowLayout)),
 }) {}
 
+const NiriCastTarget = Schema.Union(
+  Schema.Literal("Nothing"),
+  Schema.Struct({ Nothing: Schema.Struct({}) }),
+  Schema.Struct({ Output: Schema.Struct({ name: Schema.String }) }),
+  Schema.Struct({ Window: Schema.Struct({ id: Schema.Number }) }),
+)
+
+export class NiriCast extends Schema.Class<NiriCast>("NiriCast")({
+  stream_id: Schema.Number,
+  session_id: Schema.Number,
+  kind: Schema.Literal("PipeWire", "WlrScreencopy"),
+  target: NiriCastTarget,
+  is_dynamic_target: Schema.Boolean,
+  is_active: Schema.Boolean,
+  pid: Schema.NullOr(Schema.Number),
+  pw_node_id: Schema.NullOr(Schema.Number),
+}) {}
+
 const WorkspacesChanged = Schema.Struct({
   WorkspacesChanged: Schema.Struct({ workspaces: Schema.Array(NiriWorkspace) }),
 })
@@ -60,6 +106,15 @@ const WindowClosed = Schema.Struct({
 const WindowFocusChanged = Schema.Struct({
   WindowFocusChanged: Schema.Struct({ id: Schema.NullOr(Schema.Number) }),
 })
+const CastsChanged = Schema.Struct({
+  CastsChanged: Schema.Struct({ casts: Schema.Array(NiriCast) }),
+})
+const CastStartedOrChanged = Schema.Struct({
+  CastStartedOrChanged: Schema.Struct({ cast: NiriCast }),
+})
+const CastStopped = Schema.Struct({
+  CastStopped: Schema.Struct({ stream_id: Schema.Number }),
+})
 
 const KnownEvent = Schema.Union(
   WorkspacesChanged,
@@ -69,6 +124,9 @@ const KnownEvent = Schema.Union(
   WindowOpenedOrChanged,
   WindowClosed,
   WindowFocusChanged,
+  CastsChanged,
+  CastStartedOrChanged,
+  CastStopped,
 )
 
 type KnownEvent = typeof KnownEvent.Type
@@ -76,6 +134,7 @@ type KnownEvent = typeof KnownEvent.Type
 export interface NiriState {
   readonly workspaces: ReadonlyArray<NiriWorkspace>
   readonly windows: ReadonlyArray<NiriWindow>
+  readonly casts: ReadonlyArray<NiriCast>
   readonly focusedWorkspaceId: number | null
   readonly focusedWindowId: number | null
   readonly sequence: number
@@ -84,6 +143,7 @@ export interface NiriState {
 export const initialNiriState: NiriState = {
   workspaces: [],
   windows: [],
+  casts: [],
   focusedWorkspaceId: null,
   focusedWindowId: null,
   sequence: 0,
@@ -106,6 +166,12 @@ function replaceWindow(
   const existing = windows.findIndex((window) => window.id === incoming.id)
   if (existing < 0) return [...windows, incoming]
   return windows.map((window) => (window.id === incoming.id ? incoming : window))
+}
+
+function replaceCast(casts: ReadonlyArray<NiriCast>, incoming: NiriCast): ReadonlyArray<NiriCast> {
+  const existing = casts.findIndex((cast) => cast.stream_id === incoming.stream_id)
+  if (existing < 0) return [...casts, incoming]
+  return casts.map((cast) => (cast.stream_id === incoming.stream_id ? incoming : cast))
 }
 
 function reduceKnownEvent(state: NiriState, event: KnownEvent): NiriState {
@@ -173,13 +239,31 @@ function reduceKnownEvent(state: NiriState, event: KnownEvent): NiriState {
     }
   }
 
+  if ("WindowFocusChanged" in event) {
+    return {
+      ...state,
+      focusedWindowId: event.WindowFocusChanged.id,
+      windows: state.windows.map((window) => ({
+        ...window,
+        is_focused: window.id === event.WindowFocusChanged.id,
+      })),
+      sequence,
+    }
+  }
+  if ("CastsChanged" in event) {
+    return { ...state, casts: event.CastsChanged.casts, sequence }
+  }
+  if ("CastStartedOrChanged" in event) {
+    return {
+      ...state,
+      casts: replaceCast(state.casts ?? [], event.CastStartedOrChanged.cast),
+      sequence,
+    }
+  }
+
   return {
     ...state,
-    focusedWindowId: event.WindowFocusChanged.id,
-    windows: state.windows.map((window) => ({
-      ...window,
-      is_focused: window.id === event.WindowFocusChanged.id,
-    })),
+    casts: (state.casts ?? []).filter((cast) => cast.stream_id !== event.CastStopped.stream_id),
     sequence,
   }
 }
@@ -216,6 +300,9 @@ const knownEventNames = new Set([
   "WindowOpenedOrChanged",
   "WindowClosed",
   "WindowFocusChanged",
+  "CastsChanged",
+  "CastStartedOrChanged",
+  "CastStopped",
 ])
 
 export function focusWorkspaceRequest(workspaceId: number): string {
@@ -228,4 +315,43 @@ export function focusWindowRequest(windowId: number): string {
   return JSON.stringify({
     Action: { FocusWindow: { id: windowId } },
   })
+}
+
+export function stopCastRequest(sessionId: number): string {
+  return JSON.stringify({
+    Action: { StopCast: { session_id: sessionId } },
+  })
+}
+
+export function outputsRequest(): string {
+  return JSON.stringify("Outputs")
+}
+
+export function outputTransformRequest(output: string, transform: NiriOutputTransform): string {
+  return JSON.stringify({
+    Output: {
+      output,
+      action: { Transform: { transform } },
+    },
+  })
+}
+
+export function decodeOutputsReply(line: string): ReadonlyArray<NiriOutputSnapshot> {
+  let parsed: unknown
+  parsed = JSON.parse(line)
+  const reply = Schema.decodeUnknownSync(NiriOutputsReply)(parsed)
+  return Object.entries(reply.Ok.Outputs).map(([connector, output]) => ({
+    connector,
+    name: output.name,
+    transform: output.logical?.transform ?? null,
+  }))
+}
+
+export function decodeOutputConfigReply(line: string): void {
+  let parsed: unknown
+  parsed = JSON.parse(line)
+  const reply = Schema.decodeUnknownSync(NiriOutputConfigReply)(parsed)
+  if (reply.Ok.OutputConfigChanged !== "Applied") {
+    throw new Error("Niri output disappeared before the transform was applied")
+  }
 }

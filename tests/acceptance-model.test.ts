@@ -1,10 +1,15 @@
 import { describe, expect, test } from "bun:test"
+import { Either, Schema } from "effect"
 
 import {
+  DebugSnapshot,
+  assertFixtureProfileCapabilities,
   assertOneBarPerOutput,
   classifyIsolatedSessionExit,
   decodeGdbusString,
   exitCodes,
+  fixtureProfiles,
+  isFixtureProfile,
   makeResult,
   preflightEnvironment,
   waylandDisplayFromNiriSocket,
@@ -70,5 +75,76 @@ describe("nested acceptance contract", () => {
       "wayland-2",
     )
     expect(waylandDisplayFromNiriSocket("niri.invalid.sock")).toBeNull()
+  })
+
+  test("recognizes every deterministic quick settings fixture profile", () => {
+    expect(fixtureProfiles).toEqual([
+      "laptop",
+      "desktop",
+      "complex",
+      "lockscreen-laptop",
+      "lockscreen-desktop",
+      "empty-states",
+    ])
+    for (const profile of fixtureProfiles) expect(isFixtureProfile(profile)).toBe(true)
+    expect(isFixtureProfile("production" as string)).toBe(false)
+  })
+
+  test("detects fixture profile capability drift", () => {
+    expect(
+      assertFixtureProfileCapabilities("desktop", ["nightLight", "wired", "darkMode", "powerMode"])
+        .ok,
+    ).toBe(true)
+    const drift = assertFixtureProfileCapabilities("desktop", ["wifi", "powerMode"])
+    expect(drift.ok).toBe(false)
+    expect(drift.detail).toContain("actual=powerMode,wifi")
+  })
+
+  test("decodes the canonical inline-detail debug snapshot", () => {
+    const decoded = Schema.decodeUnknownEither(DebugSnapshot)({
+      version: 1,
+      ready: true,
+      pid: 123,
+      activationCount: 1,
+      settings: { visible: false, barOrientation: "vertical" },
+      quickSettings: {
+        fixtureProfile: "laptop",
+        availableCapabilities: ["wifi"],
+        volume: 0.5,
+        wifiEnabled: true,
+        bluetoothEnabled: true,
+        powerProfile: "balanced",
+        darkMode: false,
+        nightLight: false,
+        locked: false,
+        pending: null,
+        error: null,
+      },
+      niri: {
+        connected: true,
+        sequence: 1,
+        workspaceIds: [1],
+        windowIds: [],
+        focusedWorkspaceId: 1,
+        focusedWindowId: null,
+      },
+      outputs: [
+        {
+          connector: "winit",
+          orientation: "vertical",
+          barVisible: true,
+          popupVisible: false,
+          popupWorkspaceId: null,
+          quickSettingsVisible: true,
+          quickSettingsDetail: "wifi",
+          hideScheduled: false,
+        },
+      ],
+    })
+
+    expect(Either.isRight(decoded)).toBe(true)
+    if (Either.isRight(decoded)) {
+      expect(decoded.right.outputs[0]?.quickSettingsDetail).toBe("wifi")
+    }
   })
 })
