@@ -378,6 +378,36 @@ layout {
     ),
   )
 
+  const quickSettingsOutput = afterActivation.outputs[0]?.connector
+  if (!quickSettingsOutput) return yield* failure("assertion", "no output for quick settings")
+  const openQuickSettings = yield* dbusCall(nestedEnvironment, busName, "OpenQuickSettings", [
+    quickSettingsOutput,
+  ])
+  if (!openQuickSettings.includes('"ok":true')) {
+    return yield* failure("assertion", `OpenQuickSettings failed: ${openQuickSettings}`)
+  }
+  const quickSettingsVisible = yield* waitUntil("quick settings visible", () =>
+    snapshot(nestedEnvironment, busName, "quick-settings-visible").pipe(
+      Effect.map((value) =>
+        value.outputs.some(
+          (output) => output.connector === quickSettingsOutput && output.quickSettingsVisible,
+        )
+          ? value
+          : null,
+      ),
+    ),
+  )
+  if (available.grim) {
+    const quickSettingsScreenshot = yield* runCommand(
+      ["grim", "-c", join(artifactDir, "quick-settings.png")],
+      nestedEnvironment,
+    )
+    writeFileSync(
+      join(artifactDir, "quick-settings-grim.log"),
+      quickSettingsScreenshot.stdout + quickSettingsScreenshot.stderr,
+    )
+  }
+
   const openSettings = yield* runCommand(["gjs", "-m", appBundle, "--settings"], nestedEnvironment)
   writeFileSync(join(artifactDir, "settings-entry.log"), openSettings.stdout + openSettings.stderr)
   if (openSettings.code !== 0) {
@@ -460,6 +490,13 @@ layout {
           layersAfter.right,
         ).ok,
       detail: `activationCount=${afterActivation.activationCount}, bars=${afterActivation.outputs.length}`,
+    },
+    {
+      name: "quick-settings-dbus-transition",
+      ok: quickSettingsVisible.outputs.some(
+        (output) => output.connector === quickSettingsOutput && output.quickSettingsVisible,
+      ),
+      detail: `connector=${quickSettingsOutput}`,
     },
     {
       name: "settings-command-opens-and-persists-orientation",

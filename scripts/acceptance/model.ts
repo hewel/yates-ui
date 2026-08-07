@@ -79,6 +79,7 @@ export const DebugSnapshot = Schema.Struct({
       barVisible: Schema.Boolean,
       popupVisible: Schema.Boolean,
       popupWorkspaceId: Schema.NullOr(Schema.Number),
+      quickSettingsVisible: Schema.Boolean,
       hideScheduled: Schema.Boolean,
     }),
   ),

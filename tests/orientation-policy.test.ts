@@ -13,6 +13,7 @@ describe("bar orientation policy", () => {
       showWindowTitle: false,
       clockLabels: ["09", "05"],
       barAnchors: ["top", "left", "bottom"],
+      quickSettingsDirection: "right",
     })
   })
 
@@ -42,6 +43,7 @@ describe("bar orientation policy", () => {
       showWindowTitle: true,
       clockLabels: ["Fri Aug 7  09:05"],
       barAnchors: ["top", "left", "right"],
+      quickSettingsDirection: "down",
     })
   })
 

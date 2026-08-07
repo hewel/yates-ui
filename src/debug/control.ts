@@ -16,6 +16,10 @@ const interfaceXml = `
     <method name="WorkspaceLeave"><arg direction="out" type="s" name="result"/></method>
     <method name="PopupEnter"><arg direction="out" type="s" name="result"/></method>
     <method name="PopupLeave"><arg direction="out" type="s" name="result"/></method>
+    <method name="OpenQuickSettings">
+      <arg direction="in" type="s" name="output"/>
+      <arg direction="out" type="s" name="result"/>
+    </method>
     <method name="SetBarOrientation">
       <arg direction="in" type="s" name="orientation"/>
       <arg direction="out" type="s" name="result"/>
@@ -30,6 +34,7 @@ export interface DebugControlHandlers {
   workspaceLeave(): string
   popupEnter(): string
   popupLeave(): string
+  openQuickSettings(output: string): string
   setBarOrientation(orientation: string): string
   reset(): string
 }
@@ -53,6 +58,7 @@ export function startDebugControl(handlers: DebugControlHandlers): DebugControl 
     WorkspaceLeave: () => handlers.workspaceLeave(),
     PopupEnter: () => handlers.popupEnter(),
     PopupLeave: () => handlers.popupLeave(),
+    OpenQuickSettings: (output: string) => handlers.openQuickSettings(output),
     SetBarOrientation: (orientation: string) => handlers.setBarOrientation(orientation),
     Reset: () => handlers.reset(),
   })

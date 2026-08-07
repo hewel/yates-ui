@@ -10,7 +10,7 @@ export const bar = style({
 export const barVertical = style({
   backgroundColor: "#1d1d1d",
   minWidth: "34px",
-  padding: "8px 4px",
+  padding: "8px 0",
   color: "#ffffff",
 })
 

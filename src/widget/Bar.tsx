@@ -27,11 +27,17 @@ import {
   projectBarPresentation,
 } from "./bar/barPresentation"
 import { BarLayoutSpec, BarOrientation, orientationPolicy } from "./bar/orientationPolicy"
+import { QuickSettings, QuickSettingsHandle } from "./bar/QuickSettings"
+import { quickSettingsTrigger } from "./bar/QuickSettings.css"
 import { WorkspacePopupHandle, createWorkspacePopup } from "./bar/WorkspacePopup"
 import { PopupPointerEvent, WorkspacePopupEvent } from "./bar/workspacePopupSession"
 
 function gtkOrientation(orientation: BarOrientation): Gtk.Orientation {
   return orientation === "vertical" ? Gtk.Orientation.VERTICAL : Gtk.Orientation.HORIZONTAL
+}
+
+function quickSettingsDirection(direction: "down" | "right"): Gtk.ArrowType {
+  return direction === "right" ? Gtk.ArrowType.RIGHT : Gtk.ArrowType.DOWN
 }
 
 function layerEdge(edge: "top" | "left" | "right" | "bottom"): Gtk4LayerShell.Edge {
@@ -182,6 +188,8 @@ export interface CreateBarOptions {
   readonly application: Gtk.Application
   readonly orientation: BarOrientation
   readonly services: BarServices
+  readonly setBarOrientation: (orientation: BarOrientation) => void
+  readonly openSettings: () => void
 }
 
 export type BarInteraction = WorkspacePopupEvent
@@ -192,12 +200,15 @@ export interface BarSnapshot {
   readonly barVisible: boolean
   readonly popupVisible: boolean
   readonly popupWorkspaceId: number | null
+  readonly quickSettingsVisible: boolean
   readonly hideScheduled: boolean
   readonly lastPointerEvent: PopupPointerEvent | null
 }
 
 export interface BarInstance {
   dispatch(event: BarInteraction): void
+  showQuickSettings(): void
+  hideQuickSettings(): void
   snapshot(): BarSnapshot
   destroy(): void
 }
@@ -207,6 +218,7 @@ export function createBar(options: CreateBarOptions): BarInstance {
   const policy = orientationPolicy(options.orientation)
   let forwardPopupEvent = (_event: WorkspacePopupEvent) => {}
   let popup: WorkspacePopupHandle | null = null
+  let quickSettings: QuickSettingsHandle | null = null
 
   const built = createRoot((dispose) => {
     const presentation = createComputed(() =>
@@ -261,12 +273,31 @@ export function createBar(options: CreateBarOptions): BarInstance {
           )}
           <Gtk.Box $type="end" spacing={8} orientation={gtkOrientation(layout.axis)}>
             {options.services.systemIndicators && <SysTray orientation={options.orientation} />}
-            {options.services.systemIndicators && <NetworkIcon />}
-            {options.services.systemIndicators && <VolumeIcon />}
-            {options.services.systemIndicators && (
-              <BatteryStatus orientation={options.orientation} />
-            )}
-            <Gtk.Image iconName="system-shutdown-symbolic" pixelSize={16} />
+            <Gtk.MenuButton
+              class={quickSettingsTrigger}
+              direction={quickSettingsDirection(layout.quickSettingsDirection)}
+              alwaysShowArrow={false}
+              tooltipText="Quick Settings"
+              $={(self: Gtk.MenuButton) => {
+                self.update_property([Gtk.AccessibleProperty.LABEL], ["Quick Settings"])
+              }}
+            >
+              <Gtk.Box spacing={6} orientation={gtkOrientation(layout.axis)}>
+                {options.services.systemIndicators && <NetworkIcon />}
+                {options.services.systemIndicators && <VolumeIcon />}
+                {options.services.systemIndicators && (
+                  <BatteryStatus orientation={options.orientation} />
+                )}
+              </Gtk.Box>
+              <QuickSettings
+                orientation={options.orientation}
+                setBarOrientation={options.setBarOrientation}
+                openSettings={options.openSettings}
+                onReady={(handle) => {
+                  quickSettings = handle
+                }}
+              />
+            </Gtk.MenuButton>
           </Gtk.Box>
         </Gtk.CenterBox>
       </Gtk.Window>,
@@ -322,6 +353,8 @@ export function createBar(options: CreateBarOptions): BarInstance {
 
   return {
     dispatch: forwardPopupEvent,
+    showQuickSettings: () => quickSettings?.show(),
+    hideQuickSettings: () => quickSettings?.hide(),
     snapshot: () => {
       const popupObservation = popup?.observation()
       return {
@@ -330,6 +363,7 @@ export function createBar(options: CreateBarOptions): BarInstance {
         barVisible: built.window.visible,
         popupVisible: popupObservation?.visible ?? false,
         popupWorkspaceId: popupObservation?.workspaceId ?? null,
+        quickSettingsVisible: quickSettings?.visible() ?? false,
         hideScheduled: popupObservation?.hideScheduled ?? false,
         lastPointerEvent: popupObservation?.lastPointerEvent ?? null,
       }

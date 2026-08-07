@@ -53,6 +53,8 @@ const registry = new WindowRegistry<BarInstance>((connector) => {
     application: app,
     orientation: settings.barOrientation.peek(),
     services,
+    setBarOrientation: settings.setBarOrientation,
+    openSettings: showSettings,
   })
 })
 
@@ -166,6 +168,7 @@ const debugControl = startDebugControl({
           barVisible: bar?.barVisible ?? false,
           popupVisible: bar?.popupVisible ?? false,
           popupWorkspaceId: bar?.popupWorkspaceId ?? null,
+          quickSettingsVisible: bar?.quickSettingsVisible ?? false,
           hideScheduled: bar?.hideScheduled ?? false,
           lastPointerEvent: bar?.lastPointerEvent ?? null,
         }
@@ -197,6 +200,12 @@ const debugControl = startDebugControl({
     handle.dispatch({ type: "popup-leave", origin: "debug" })
     return ok()
   },
+  openQuickSettings: (output) => {
+    const handle = registry.get(output)
+    if (!handle) return JSON.stringify({ ok: false, error: "unknown-output" })
+    handle.showQuickSettings()
+    return ok()
+  },
   setBarOrientation: (orientation) => {
     if (orientation !== "vertical" && orientation !== "horizontal") {
       return JSON.stringify({ ok: false, error: "invalid-orientation" })
@@ -206,7 +215,9 @@ const debugControl = startDebugControl({
   },
   reset: () => {
     for (const connector of registry.connectors()) {
-      registry.get(connector)?.dispatch({ type: "reset", origin: "debug" })
+      const handle = registry.get(connector)
+      handle?.dispatch({ type: "reset", origin: "debug" })
+      handle?.hideQuickSettings()
     }
     activeDebugConnector = null
     return ok()

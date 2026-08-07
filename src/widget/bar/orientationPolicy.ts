@@ -28,6 +28,7 @@ export interface BarLayoutSpec {
   readonly showWindowTitle: boolean
   readonly clockLabels: readonly string[]
   readonly barAnchors: readonly ("top" | "left" | "right" | "bottom")[]
+  readonly quickSettingsDirection: "down" | "right"
 }
 
 export interface OrientationPolicy {
@@ -44,6 +45,7 @@ const verticalPolicy: OrientationPolicy = {
     showWindowTitle: false,
     clockLabels: [format(now, "HH"), format(now, "mm")],
     barAnchors: ["top", "left", "bottom"],
+    quickSettingsDirection: "right",
   }),
   placePopup: (anchor, size) => ({
     marginLeft: 2,
@@ -66,6 +68,7 @@ const horizontalPolicy: OrientationPolicy = {
     showWindowTitle: true,
     clockLabels: [format(now, "EEE MMM d  HH:mm")],
     barAnchors: ["top", "left", "right"],
+    quickSettingsDirection: "down",
   }),
   placePopup: (anchor) => ({
     marginLeft: Math.max(0, Math.round(anchor.x)),
