@@ -26,6 +26,17 @@ export interface AudioPresentation {
   readonly outputs: ReadonlyArray<AudioOutputPresentation>
 }
 
+/**
+ * AstalWp's `connected` GObject property is broken in current releases and emits
+ * a warning whenever it is read. A real output is the capability the UI needs.
+ */
+export function audioAvailableFromOutputs(
+  activeOutputId: string | null,
+  outputs: ReadonlyArray<AudioOutputPresentation>,
+): boolean {
+  return activeOutputId !== null && outputs.some((output) => output.id === activeOutputId)
+}
+
 export interface WifiNetworkPresentation {
   readonly id: string
   readonly name: string

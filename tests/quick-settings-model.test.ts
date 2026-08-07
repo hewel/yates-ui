@@ -1,11 +1,22 @@
 import { describe, expect, test } from "bun:test"
 
 import {
+  audioAvailableFromOutputs,
   createFixtureQuickSettingsModule,
   fixtureQuickSettingsState,
 } from "../src/services/quickSettingsModel"
 
 describe("quick settings fixture model", () => {
+  test("derives live audio availability from real outputs instead of Wp.connected", () => {
+    const outputs = [{ id: "speaker", name: "Built-in Audio", iconName: "audio-speakers-symbolic" }]
+
+    expect(audioAvailableFromOutputs(null, outputs)).toBe(false)
+    expect(audioAvailableFromOutputs("0", outputs)).toBe(false)
+    expect(audioAvailableFromOutputs("stale", outputs)).toBe(false)
+    expect(audioAvailableFromOutputs("speaker", [])).toBe(false)
+    expect(audioAvailableFromOutputs("speaker", outputs)).toBe(true)
+  })
+
   test("projects the deterministic laptop capabilities used by nested acceptance", () => {
     const state = fixtureQuickSettingsState()
 

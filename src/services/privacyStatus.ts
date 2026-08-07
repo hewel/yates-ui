@@ -60,18 +60,12 @@ function createLivePrivacyStatusModule(niri: NiriStateSource): PrivacyStatusModu
 
   const refresh = () => {
     if (stopped) return
-    const wirePlumberConnected = wp.connected
     publish(
       projectPrivacyStatus({
         niriState: niri.state.peek(),
         niriConnected: niri.connected.peek(),
-        wirePlumberConnected,
-        microphoneRecorderCount: wirePlumberConnected
-          ? recorderCount("microphone", () => audio.get_recorders())
-          : null,
-        cameraRecorderCount: wirePlumberConnected
-          ? recorderCount("camera", () => video.get_recorders())
-          : null,
+        microphoneRecorderCount: recorderCount("microphone", () => audio.get_recorders()),
+        cameraRecorderCount: recorderCount("camera", () => video.get_recorders()),
       }),
     )
   }

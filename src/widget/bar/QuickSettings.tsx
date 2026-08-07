@@ -1027,8 +1027,16 @@ export function QuickSettings(options: QuickSettingsOptions) {
       $={(self: Gtk.Popover) => {
         popover = self
         options.onReady({
-          show: () => self.popup(),
-          hide: () => self.popdown(),
+          show: () => {
+            const owner = self.get_parent()
+            if (owner instanceof Gtk.MenuButton) owner.set_active(true)
+            else self.popup()
+          },
+          hide: () => {
+            const owner = self.get_parent()
+            if (owner instanceof Gtk.MenuButton) owner.set_active(false)
+            else self.popdown()
+          },
           visible: () => self.visible,
           detail: () => detail.peek(),
           openDetail,

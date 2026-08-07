@@ -27,6 +27,7 @@ import {
   QuickSettingsModule,
   QuickSettingsPending,
   QuickSettingsState,
+  audioAvailableFromOutputs,
   createFixtureQuickSettingsModule,
 } from "./quickSettingsModel"
 
@@ -331,6 +332,8 @@ function createLiveQuickSettingsModule(niriSocketPath: string | null): QuickSett
       name: output.description ?? output.name ?? "Audio Output",
       iconName: output.icon || "audio-speakers-symbolic",
     }))
+    const activeOutputId = speaker ? String(speaker.id) : null
+    const audioAvailable = audioAvailableFromOutputs(activeOutputId, outputs)
     const devices = bluetooth.devices
       .map((device) => ({
         id: device.address,
@@ -405,11 +408,13 @@ function createLiveQuickSettingsModule(niriSocketPath: string | null): QuickSett
         iconName: "display-brightness-symbolic",
       },
       audio: {
-        available: Boolean(wp.connected && speaker),
-        volume: speaker?.volume ?? 0,
-        muted: speaker?.mute ?? false,
-        iconName: speaker?.volumeIcon ?? "audio-volume-muted-symbolic",
-        activeOutputId: speaker ? String(speaker.id) : null,
+        available: audioAvailable,
+        volume: audioAvailable ? (speaker?.volume ?? 0) : 0,
+        muted: audioAvailable ? (speaker?.mute ?? false) : false,
+        iconName: audioAvailable
+          ? (speaker?.volumeIcon ?? "audio-volume-muted-symbolic")
+          : "audio-volume-muted-symbolic",
+        activeOutputId: audioAvailable ? activeOutputId : null,
         outputs,
       },
       wifi: {

@@ -17,21 +17,71 @@ const focus = {
 }
 
 export const quickSettingsTrigger = style({
-  minHeight: "28px",
-  padding: "2px 8px",
+  minHeight: "32px",
+  padding: "0",
   border: "none",
-  borderRadius: "9px",
   backgroundColor: "transparent",
-  color: "@theme_fg_color",
-  ":hover": { backgroundColor: "alpha(@theme_fg_color, 0.12)" },
-  ":checked": { backgroundColor: "alpha(@theme_fg_color, 0.2)" },
-  ":focus-visible": focus,
+  color: foreground,
 })
 
 export const quickSettingsTriggerVertical = style({
-  minWidth: "24px",
-  padding: "4px 3px",
-  borderRadius: "14px",
+  minWidth: "32px",
+})
+
+// Gtk.MenuButton owns a nested button.toggle node. Interactive state belongs
+// to that node, so styling only the menubutton root leaks the GTK theme accent.
+globalStyle(`${quickSettingsTrigger} > button.toggle`, {
+  minHeight: "32px",
+  padding: "0 10px",
+  border: "none",
+  borderRadius: "16px",
+  backgroundImage: "none",
+  backgroundColor: "transparent",
+  boxShadow: "none",
+  color: foreground,
+  outline: "none",
+})
+
+globalStyle(`${quickSettingsTrigger} > button.toggle:hover`, {
+  backgroundImage: "none",
+  backgroundColor: "rgba(255, 255, 255, 0.10)",
+  boxShadow: "none",
+})
+
+globalStyle(`${quickSettingsTrigger} > button.toggle:active`, {
+  backgroundImage: "none",
+  backgroundColor: "rgba(255, 255, 255, 0.14)",
+  boxShadow: "none",
+})
+
+globalStyle(`${quickSettingsTrigger} > button.toggle:checked`, {
+  backgroundImage: "none",
+  backgroundColor: "#3d3d3d",
+  boxShadow: "none",
+  color: foreground,
+})
+
+globalStyle(`${quickSettingsTrigger} > button.toggle:checked:hover`, {
+  backgroundImage: "none",
+  backgroundColor: "#484848",
+})
+
+globalStyle(`${quickSettingsTrigger} > button.toggle:checked:active`, {
+  backgroundImage: "none",
+  backgroundColor: "#505050",
+  boxShadow: "none",
+})
+
+globalStyle(`${quickSettingsTrigger} > button.toggle:focus-visible`, {
+  outline: "none",
+  boxShadow: "inset 0 0 0 2px rgba(255, 255, 255, 0.28)",
+})
+
+globalStyle(`${quickSettingsTriggerVertical} > button.toggle`, {
+  minWidth: "32px",
+  minHeight: "40px",
+  padding: "3px 0",
+  borderRadius: "16px",
 })
 
 export const quickSettingsPopover = style({

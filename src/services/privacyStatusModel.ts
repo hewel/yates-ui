@@ -65,13 +65,11 @@ export function projectNiriCasts(state: NiriState): ReadonlyArray<PrivacyCastPre
 export function projectPrivacyStatus(options: {
   readonly niriState: NiriState
   readonly niriConnected: boolean
-  readonly wirePlumberConnected: boolean
   readonly microphoneRecorderCount: number | null
   readonly cameraRecorderCount: number | null
 }): PrivacyStatusState {
-  const microphoneAvailable =
-    options.wirePlumberConnected && options.microphoneRecorderCount !== null
-  const cameraAvailable = options.wirePlumberConnected && options.cameraRecorderCount !== null
+  const microphoneAvailable = options.microphoneRecorderCount !== null
+  const cameraAvailable = options.cameraRecorderCount !== null
 
   return {
     screenSharingAvailable: options.niriConnected,

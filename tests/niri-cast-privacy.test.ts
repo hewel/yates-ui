@@ -146,7 +146,6 @@ describe("Niri cast state and privacy presentation", () => {
       projectPrivacyStatus({
         niriState: withCast,
         niriConnected: false,
-        wirePlumberConnected: true,
         microphoneRecorderCount: 2,
         cameraRecorderCount: null,
       }),
@@ -155,6 +154,20 @@ describe("Niri cast state and privacy presentation", () => {
       casts: [],
       microphone: { available: true, active: true, count: 2 },
       camera: { available: false, active: false, count: 0 },
+    })
+  })
+
+  test("treats successful empty recorder reads as available but inactive", () => {
+    expect(
+      projectPrivacyStatus({
+        niriState: initialNiriState,
+        niriConnected: true,
+        microphoneRecorderCount: 0,
+        cameraRecorderCount: 0,
+      }),
+    ).toMatchObject({
+      microphone: { available: true, active: false, count: 0 },
+      camera: { available: true, active: false, count: 0 },
     })
   })
 
