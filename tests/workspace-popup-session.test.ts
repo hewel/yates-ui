@@ -11,14 +11,17 @@ import {
 function fakeTimer() {
   let nextId = 1
   const callbacks = new Map<number, () => void>()
+  const delays = new Map<number, number>()
   const timer: PopupTimer = {
-    schedule: (callback) => {
+    schedule: (callback, delayMs) => {
       const id = nextId++
       callbacks.set(id, callback)
+      delays.set(id, delayMs)
       return id
     },
     cancel: (id) => {
       callbacks.delete(id)
+      delays.delete(id)
     },
   }
   return {
@@ -26,9 +29,11 @@ function fakeTimer() {
     fire: (id: number) => {
       const callback = callbacks.get(id)
       callbacks.delete(id)
+      delays.delete(id)
       callback?.()
     },
     pending: () => [...callbacks.keys()],
+    delay: (id: number) => delays.get(id),
   }
 }
 
@@ -53,6 +58,12 @@ function createSession(
     readContent,
     hasContent: (content) => content.length > 0,
     resolveAnchor: () => ({ x: 0, y: 40, width: 32, height: 20 }),
+    resolvePointerTarget: (placement, size) => ({
+      x: 40,
+      y: placement.marginTop,
+      width: size.width,
+      height: size.height,
+    }),
     view,
     policy: orientationPolicy("vertical"),
     onChange,
@@ -104,6 +115,7 @@ describe("workspace popup session", () => {
     session.dispatch({ type: "workspace-enter", workspaceId: 8, origin: "pointer" })
     session.dispatch({ type: "workspace-leave", origin: "pointer" })
     const [hideId] = timer.pending()
+    expect(timer.delay(hideId)).toBe(200)
     timer.fire(hideId)
 
     expect(session.snapshot()).toEqual({
@@ -133,6 +145,51 @@ describe("workspace popup session", () => {
 
     session.dispatch({ type: "workspace-enter", workspaceId: 10, origin: "debug" })
     expect(session.snapshot().workspaceId).toBeNull()
+  })
+
+  test("keeps the current workspace while the pointer aims through the popup cone", () => {
+    const counts = new Map([
+      [8, 2],
+      [9, 1],
+    ])
+    const timer = fakeTimer()
+    const session = createSession(counts, timer.timer)
+
+    session.dispatch({ type: "workspace-enter", workspaceId: 8, origin: "pointer" })
+    session.dispatch({ type: "pointer-motion", point: { x: 8, y: 42 }, origin: "pointer" })
+    session.dispatch({ type: "pointer-motion", point: { x: 18, y: 46 }, origin: "pointer" })
+    session.dispatch({ type: "pointer-motion", point: { x: 28, y: 50 }, origin: "pointer" })
+    session.dispatch({ type: "workspace-leave", origin: "pointer" })
+    session.dispatch({ type: "workspace-enter", workspaceId: 9, origin: "pointer" })
+
+    expect(session.snapshot().workspaceId).toBe(8)
+    expect(timer.pending()).toHaveLength(1)
+
+    session.dispatch({ type: "pointer-motion", point: { x: 30, y: 82 }, origin: "pointer" })
+
+    expect(session.snapshot().workspaceId).toBe(9)
+    expect(timer.pending()).toEqual([])
+  })
+
+  test("bounds the prediction-cone delay when the pointer pauses on a sibling", () => {
+    const counts = new Map([
+      [8, 2],
+      [9, 1],
+    ])
+    const timer = fakeTimer()
+    const session = createSession(counts, timer.timer)
+
+    session.dispatch({ type: "workspace-enter", workspaceId: 8, origin: "pointer" })
+    session.dispatch({ type: "pointer-motion", point: { x: 8, y: 42 }, origin: "pointer" })
+    session.dispatch({ type: "pointer-motion", point: { x: 18, y: 46 }, origin: "pointer" })
+    session.dispatch({ type: "pointer-motion", point: { x: 28, y: 50 }, origin: "pointer" })
+    session.dispatch({ type: "workspace-enter", workspaceId: 9, origin: "pointer" })
+    const [intentDelayId] = timer.pending()
+
+    expect(session.snapshot().workspaceId).toBe(8)
+    expect(timer.delay(intentDelayId)).toBe(300)
+    timer.fire(intentDelayId)
+    expect(session.snapshot().workspaceId).toBe(9)
   })
 
   test("updates content before measuring, resizing, positioning, and showing", () => {

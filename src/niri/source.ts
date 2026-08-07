@@ -4,13 +4,20 @@ import GLib from "gi://GLib"
 import { Accessor, createState } from "gnim"
 
 import { diagnosticLog } from "../debug/log"
-import { NiriState, applyNiriEventLine, focusWorkspaceRequest, initialNiriState } from "./state"
+import {
+  NiriState,
+  applyNiriEventLine,
+  focusWindowRequest,
+  focusWorkspaceRequest,
+  initialNiriState,
+} from "./state"
 
 export interface NiriStateSource {
   readonly state: Accessor<NiriState>
   readonly socketPath: string | null
   readonly connected: () => boolean
   focusWorkspace(workspaceId: number): void
+  focusWindow(windowId: number): void
   stop(): void
 }
 
@@ -119,6 +126,9 @@ export function createNiriStateSource(): NiriStateSource {
     connected: () => isConnected,
     focusWorkspace: (workspaceId) => {
       sendRequest(focusWorkspaceRequest(workspaceId))
+    },
+    focusWindow: (windowId) => {
+      sendRequest(focusWindowRequest(windowId))
     },
     stop: () => {
       if (stopped) return

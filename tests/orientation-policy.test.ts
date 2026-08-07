@@ -25,6 +25,13 @@ describe("bar orientation policy", () => {
     expect(
       policy.placePopup({ x: 0, y: 2, width: 32, height: 10 }, { width: 80, height: 40 }),
     ).toEqual({ marginLeft: 2, marginTop: 0 })
+    expect(
+      policy.popupTarget(
+        { marginLeft: 2, marginTop: 35 },
+        { width: 80, height: 30 },
+        { width: 32, height: 120 },
+      ),
+    ).toEqual({ x: 34, y: 35, width: 80, height: 30 })
   })
 
   test("describes the horizontal bar layout", () => {
@@ -47,5 +54,12 @@ describe("bar orientation policy", () => {
     expect(
       policy.placePopup({ x: -8, y: 0, width: 20, height: 30 }, { width: 80, height: 40 }),
     ).toEqual({ marginLeft: 0, marginTop: 2 })
+    expect(
+      policy.popupTarget(
+        { marginLeft: 48, marginTop: 2 },
+        { width: 80, height: 40 },
+        { width: 120, height: 30 },
+      ),
+    ).toEqual({ x: 48, y: 32, width: 80, height: 40 })
   })
 })

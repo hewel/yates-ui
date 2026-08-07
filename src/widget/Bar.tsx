@@ -294,8 +294,14 @@ export function createBar(options: CreateBarOptions): BarInstance {
     policy,
     presentation: built.presentation,
     resolveAnchor: built.resolveAnchor,
+    focusWindow: options.services.niri.focusWindow,
   })
   forwardPopupEvent = popup.dispatch
+  const pointerMotion = new Gtk.EventControllerMotion()
+  pointerMotion.connect("motion", (_controller, x, y) => {
+    forwardPopupEvent({ type: "pointer-motion", point: { x, y }, origin: "pointer" })
+  })
+  built.window.add_controller(pointerMotion)
 
   built.window.present()
   diagnosticLog("bar.created", { connector })

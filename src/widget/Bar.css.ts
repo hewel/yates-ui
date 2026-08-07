@@ -51,6 +51,22 @@ export const popupWindow = style({
   boxShadow: "none",
 })
 
+export const workspacePopupButton = style({
+  minWidth: "32px",
+  minHeight: "32px",
+  padding: "4px",
+  border: "none",
+  borderRadius: "8px",
+  backgroundColor: "transparent",
+  color: "inherit",
+  ":hover": {
+    backgroundColor: "rgba(255, 255, 255, 0.12)",
+  },
+  ":active": {
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+  },
+})
+
 export const windowTitle = style({
   fontWeight: "500",
   fontSize: "0.8rem",

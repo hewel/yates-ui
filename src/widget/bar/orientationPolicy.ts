@@ -31,6 +31,7 @@ export interface BarLayoutSpec {
 export interface OrientationPolicy {
   layout(now: Date): BarLayoutSpec
   placePopup(anchor: Rect, size: Size): PopupPlacement
+  popupTarget(placement: PopupPlacement, popupSize: Size, barSize: Size): Rect
 }
 
 const verticalPolicy: OrientationPolicy = {
@@ -46,6 +47,13 @@ const verticalPolicy: OrientationPolicy = {
     marginLeft: 2,
     marginTop: Math.max(0, Math.round(anchor.y + anchor.height / 2 - size.height / 2)),
   }),
+  popupTarget: (placement, popupSize, barSize) => ({
+    // Layer-shell margins start beyond the bar's exclusive zone; add its width back for bar-local input.
+    x: barSize.width + placement.marginLeft,
+    y: placement.marginTop,
+    width: popupSize.width,
+    height: popupSize.height,
+  }),
 }
 
 const horizontalPolicy: OrientationPolicy = {
@@ -60,6 +68,13 @@ const horizontalPolicy: OrientationPolicy = {
   placePopup: (anchor) => ({
     marginLeft: Math.max(0, Math.round(anchor.x)),
     marginTop: 2,
+  }),
+  popupTarget: (placement, popupSize, barSize) => ({
+    // Layer-shell margins start beyond the bar's exclusive zone; add its height back for bar-local input.
+    x: placement.marginLeft,
+    y: barSize.height + placement.marginTop,
+    width: popupSize.width,
+    height: popupSize.height,
   }),
 }
 

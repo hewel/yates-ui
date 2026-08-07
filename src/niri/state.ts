@@ -223,3 +223,9 @@ export function focusWorkspaceRequest(workspaceId: number): string {
     Action: { FocusWorkspace: { reference: { Id: workspaceId } } },
   })
 }
+
+export function focusWindowRequest(windowId: number): string {
+  return JSON.stringify({
+    Action: { FocusWindow: { id: windowId } },
+  })
+}

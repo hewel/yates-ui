@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test"
 
-import { applyNiriEventLine, focusWorkspaceRequest, initialNiriState } from "../src/niri/state"
+import {
+  applyNiriEventLine,
+  focusWindowRequest,
+  focusWorkspaceRequest,
+  initialNiriState,
+} from "../src/niri/state"
 
 const workspacesChanged = JSON.stringify({
   WorkspacesChanged: {
@@ -47,6 +52,10 @@ const windowsChanged = JSON.stringify({
 describe("Niri event replay", () => {
   test("encodes workspace focus by stable Niri workspace id", () => {
     expect(focusWorkspaceRequest(7)).toBe('{"Action":{"FocusWorkspace":{"reference":{"Id":7}}}}')
+  })
+
+  test("encodes window focus by stable Niri window id", () => {
+    expect(focusWindowRequest(42)).toBe('{"Action":{"FocusWindow":{"id":42}}}')
   })
 
   test("builds workspace and window state from the initial event burst", () => {

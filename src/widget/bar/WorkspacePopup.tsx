@@ -7,7 +7,7 @@ import Gtk4LayerShell from "gi://Gtk4LayerShell?version=1.0"
 
 import { Accessor, For, createEffect, createRoot, createState } from "gnim"
 
-import { popupWindow, workspacePopup } from "../Bar.css"
+import { popupWindow, workspacePopup, workspacePopupButton } from "../Bar.css"
 import { BarPopupWindowPresentation, BarPresentation } from "./barPresentation"
 import { OrientationPolicy } from "./orientationPolicy"
 import {
@@ -45,6 +45,7 @@ export interface WorkspacePopupOptions {
   readonly policy: OrientationPolicy
   readonly presentation: Accessor<BarPresentation>
   readonly resolveAnchor: (workspaceId: number) => Gtk.Button | undefined
+  readonly focusWindow: (windowId: number) => void
 }
 
 export interface WorkspacePopupObservation extends WorkspacePopupSnapshot {
@@ -90,13 +91,22 @@ export function createWorkspacePopup(options: WorkspacePopupOptions): WorkspaceP
           <Gtk.Box class={workspacePopup}>
             <Gtk.Box spacing={10}>
               <For each={renderedWindows}>
-                {(window: BarPopupWindowPresentation) => (
-                  <Gtk.Image
-                    {...iconForAppId(window.appId)}
-                    pixelSize={24}
-                    tooltipText={window.title ?? undefined}
-                  />
-                )}
+                {(window: BarPopupWindowPresentation) => {
+                  const label = window.title ?? window.appId ?? "Window"
+                  return (
+                    <Gtk.Button
+                      class={workspacePopupButton}
+                      canFocus={false}
+                      tooltipText={label}
+                      onClicked={() => {
+                        options.focusWindow(window.id)
+                        forwardEvent({ type: "reset", origin: "pointer" })
+                      }}
+                    >
+                      <Gtk.Image {...iconForAppId(window.appId)} pixelSize={24} />
+                    </Gtk.Button>
+                  )
+                }}
               </For>
             </Gtk.Box>
           </Gtk.Box>
@@ -137,6 +147,11 @@ export function createWorkspacePopup(options: WorkspacePopupOptions): WorkspaceP
         height: bounds.get_height(),
       }
     },
+    resolvePointerTarget: (placement, popupSize) =>
+      options.policy.popupTarget(placement, popupSize, {
+        width: options.barWindow.get_width(),
+        height: options.barWindow.get_height(),
+      }),
     view: {
       render: setRenderedWindows,
       measure: () => {
