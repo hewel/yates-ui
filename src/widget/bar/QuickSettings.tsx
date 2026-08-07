@@ -24,12 +24,12 @@ import {
   quickSettingsError,
   quickSettingsFooterButton,
   quickSettingsHeader,
-  quickSettingsHeaderIcon,
   quickSettingsIcon,
   quickSettingsList,
   quickSettingsMain,
   quickSettingsPanel,
   quickSettingsPopover,
+  quickSettingsScroller,
   quickSettingsSlider,
   quickSettingsSplitTile,
   quickSettingsSplitTileArrow,
@@ -85,8 +85,6 @@ function sessionLabel(action: SessionAction): string {
 
 function DetailHeader({
   title,
-  iconName,
-  iconActive,
   onBack,
   actionIconName,
   actionTooltip,
@@ -94,8 +92,6 @@ function DetailHeader({
   onAction,
 }: {
   title: string
-  iconName: string | Accessor<string>
-  iconActive?: Accessor<boolean>
   onBack: () => void
   actionIconName?: string
   actionTooltip?: string
@@ -113,17 +109,6 @@ function DetailHeader({
           self.update_property([Gtk.AccessibleProperty.LABEL], ["Back"])
         }}
       />
-      <Gtk.Box
-        class={
-          iconActive?.as((active) =>
-            active ? `${quickSettingsHeaderIcon} active` : quickSettingsHeaderIcon,
-          ) ?? quickSettingsHeaderIcon
-        }
-        halign={Gtk.Align.CENTER}
-        valign={Gtk.Align.CENTER}
-      >
-        <Gtk.Image iconName={iconName} pixelSize={22} />
-      </Gtk.Box>
       <Gtk.Label class={quickSettingsTitle} label={title} xalign={0} hexpand={true} />
       {actionIconName && onAction && (
         <Gtk.Button
@@ -145,6 +130,7 @@ function DetailRow({
   iconName,
   title,
   subtitle,
+  statusIconName,
   active,
   sensitive,
   visible,
@@ -153,6 +139,7 @@ function DetailRow({
   iconName: string
   title: string
   subtitle?: string | Accessor<string>
+  statusIconName?: string
   active?: Accessor<boolean>
   sensitive?: Accessor<boolean>
   visible?: Accessor<boolean>
@@ -168,11 +155,21 @@ function DetailRow({
         }
         sensitive={sensitive}
         onClicked={onClicked}
-        tooltipText={title}
       >
         <Gtk.Box spacing={12}>
-          <Gtk.Image class={quickSettingsIcon} iconName={iconName} pixelSize={20} />
-          <Gtk.Box orientation={Gtk.Orientation.VERTICAL} spacing={2} hexpand={true}>
+          <Gtk.Image
+            class={quickSettingsIcon}
+            iconName={iconName}
+            pixelSize={18}
+            widthRequest={20}
+            halign={Gtk.Align.CENTER}
+          />
+          <Gtk.Box
+            orientation={Gtk.Orientation.VERTICAL}
+            spacing={2}
+            hexpand={true}
+            valign={Gtk.Align.CENTER}
+          >
             <Gtk.Label
               label={title}
               xalign={0}
@@ -189,6 +186,7 @@ function DetailRow({
               />
             )}
           </Gtk.Box>
+          {statusIconName && <Gtk.Image iconName={statusIconName} pixelSize={14} />}
           {active && (
             <Gtk.Image iconName="object-select-symbolic" pixelSize={16} visible={active} />
           )}
@@ -225,8 +223,14 @@ function MainTile({
         if (self.active !== active()) onClicked()
       }}
     >
-      <Gtk.Box spacing={10}>
-        <Gtk.Image class={quickSettingsTileIcon} iconName={iconName} pixelSize={18} />
+      <Gtk.Box class={quickSettingsTileText} spacing={8} hexpand={true} valign={Gtk.Align.CENTER}>
+        <Gtk.Image
+          class={quickSettingsTileIcon}
+          iconName={iconName}
+          pixelSize={18}
+          widthRequest={20}
+          halign={Gtk.Align.CENTER}
+        />
         <Gtk.Label
           class={quickSettingsTileLabel}
           label={label}
@@ -271,13 +275,20 @@ function SplitTile({
           if (self.active !== active()) onToggle()
         }}
       >
-        <Gtk.Box spacing={8}>
-          <Gtk.Image class={quickSettingsTileIcon} iconName={iconName} pixelSize={18} />
+        <Gtk.Box spacing={8} hexpand={true} valign={Gtk.Align.CENTER}>
+          <Gtk.Image
+            class={quickSettingsTileIcon}
+            iconName={iconName}
+            pixelSize={18}
+            widthRequest={20}
+            halign={Gtk.Align.CENTER}
+          />
           <Gtk.Box
             class={quickSettingsTileText}
             orientation={Gtk.Orientation.VERTICAL}
             spacing={0}
             hexpand={true}
+            valign={Gtk.Align.CENTER}
           >
             <Gtk.Label
               class={quickSettingsTileLabel}
@@ -550,7 +561,7 @@ export function QuickSettings(options: QuickSettingsOptions) {
             </Gtk.FlowBoxChild>
             <Gtk.FlowBoxChild visible={createComputed(() => state().nightLight.available)}>
               <MainTile
-                iconName={createComputed(() => "night-light-symbolic")}
+                iconName={createComputed(() => "weather-clear-symbolic")}
                 label={createComputed(() => "Night Light")}
                 active={createComputed(() => state().nightLight.enabled)}
                 sensitive={createComputed(() => state().nightLight.available)}
@@ -583,7 +594,7 @@ export function QuickSettings(options: QuickSettingsOptions) {
                 subtitle={createComputed(() =>
                   options.orientation === "vertical" ? "Vertical" : "Horizontal",
                 )}
-                active={createComputed(() => true)}
+                active={createComputed(() => false)}
                 onToggle={() =>
                   options.setBarOrientation(
                     options.orientation === "vertical" ? "horizontal" : "vertical",
@@ -611,8 +622,6 @@ export function QuickSettings(options: QuickSettingsOptions) {
         >
           <DetailHeader
             title="Wi-Fi"
-            iconName={createComputed(() => state().wifi.iconName)}
-            iconActive={createComputed(() => state().wifi.enabled)}
             actionIconName="view-refresh-symbolic"
             actionTooltip="Scan networks"
             actionSensitive={createComputed(() => state().wifi.enabled)}
@@ -630,29 +639,34 @@ export function QuickSettings(options: QuickSettingsOptions) {
               () => !state().wifi.enabled || state().wifi.networks.length === 0,
             )}
           />
-          <Gtk.ListBox
-            class={quickSettingsList}
-            selectionMode={Gtk.SelectionMode.NONE}
+          <Gtk.ScrolledWindow
+            class={quickSettingsScroller}
+            hscrollbarPolicy={Gtk.PolicyType.NEVER}
+            vscrollbarPolicy={Gtk.PolicyType.AUTOMATIC}
+            propagateNaturalHeight={true}
+            maxContentHeight={336}
             visible={createComputed(() => state().wifi.enabled && state().wifi.networks.length > 0)}
           >
-            <For<QuickSettingsState["wifi"]["networks"][number], GObject.Object, string>
-              each={createComputed(() => state().wifi.networks)}
-              id={(network) => network.id}
-            >
-              {(network) => (
-                <DetailRow
-                  iconName={network.iconName}
-                  title={network.name}
-                  subtitle={network.secure ? "Secured" : "Open"}
-                  active={createComputed(() => state().wifi.activeNetworkId === network.id)}
-                  sensitive={createComputed(() => state().wifi.enabled)}
-                  onClicked={() =>
-                    options.quickSettings.dispatch({ type: "connect-wifi", id: network.id })
-                  }
-                />
-              )}
-            </For>
-          </Gtk.ListBox>
+            <Gtk.ListBox class={quickSettingsList} selectionMode={Gtk.SelectionMode.NONE}>
+              <For<QuickSettingsState["wifi"]["networks"][number], GObject.Object, string>
+                each={createComputed(() => state().wifi.networks)}
+                id={(network) => network.id}
+              >
+                {(network) => (
+                  <DetailRow
+                    iconName={network.iconName}
+                    title={network.name}
+                    statusIconName={network.secure ? "channel-secure-symbolic" : undefined}
+                    active={createComputed(() => state().wifi.activeNetworkId === network.id)}
+                    sensitive={createComputed(() => state().wifi.enabled)}
+                    onClicked={() =>
+                      options.quickSettings.dispatch({ type: "connect-wifi", id: network.id })
+                    }
+                  />
+                )}
+              </For>
+            </Gtk.ListBox>
+          </Gtk.ScrolledWindow>
         </Gtk.Box>
 
         <Gtk.Box
@@ -661,16 +675,7 @@ export function QuickSettings(options: QuickSettingsOptions) {
           spacing={12}
           visible={isPageVisible("bluetooth")}
         >
-          <DetailHeader
-            title="Bluetooth"
-            iconName={createComputed(() =>
-              state().bluetooth.enabled
-                ? "bluetooth-active-symbolic"
-                : "bluetooth-disabled-symbolic",
-            )}
-            iconActive={createComputed(() => state().bluetooth.enabled)}
-            onBack={() => navigate("main")}
-          />
+          <DetailHeader title="Bluetooth" onBack={() => navigate("main")} />
           <Gtk.Label
             class={quickSettingsEmptyState}
             label={createComputed(() =>
@@ -734,11 +739,7 @@ export function QuickSettings(options: QuickSettingsOptions) {
           spacing={12}
           visible={isPageVisible("audio")}
         >
-          <DetailHeader
-            title="Sound Output"
-            iconName={createComputed(() => state().audio.iconName)}
-            onBack={() => navigate("main")}
-          />
+          <DetailHeader title="Sound Output" onBack={() => navigate("main")} />
           <Gtk.ListBox class={quickSettingsList} selectionMode={Gtk.SelectionMode.NONE}>
             <For<QuickSettingsState["audio"]["outputs"][number], GObject.Object, string>
               each={createComputed(() => state().audio.outputs)}
@@ -764,11 +765,7 @@ export function QuickSettings(options: QuickSettingsOptions) {
           spacing={12}
           visible={isPageVisible("power-profile")}
         >
-          <DetailHeader
-            title="Power Mode"
-            iconName={createComputed(() => state().powerMode.iconName)}
-            onBack={() => navigate("main")}
-          />
+          <DetailHeader title="Power Mode" onBack={() => navigate("main")} />
           <Gtk.ListBox class={quickSettingsList} selectionMode={Gtk.SelectionMode.NONE}>
             <For<QuickSettingsState["powerMode"]["profiles"][number], GObject.Object, string>
               each={createComputed(() => state().powerMode.profiles)}
@@ -794,11 +791,7 @@ export function QuickSettings(options: QuickSettingsOptions) {
           spacing={12}
           visible={isPageVisible("orientation")}
         >
-          <DetailHeader
-            title="Bar Orientation"
-            iconName="view-dual-symbolic"
-            onBack={() => navigate("main")}
-          />
+          <DetailHeader title="Bar Orientation" onBack={() => navigate("main")} />
           <Gtk.Box orientation={Gtk.Orientation.HORIZONTAL} spacing={8} homogeneous={true}>
             <Gtk.ToggleButton
               class={quickSettingsChoice}
@@ -825,11 +818,7 @@ export function QuickSettings(options: QuickSettingsOptions) {
           spacing={12}
           visible={isPageVisible("session-confirmation")}
         >
-          <DetailHeader
-            title="Power"
-            iconName="system-shutdown-symbolic"
-            onBack={() => navigate("main")}
-          />
+          <DetailHeader title="Power" onBack={() => navigate("main")} />
           <Gtk.Box
             orientation={Gtk.Orientation.VERTICAL}
             spacing={12}

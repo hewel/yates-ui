@@ -28,6 +28,12 @@ export const quickSettingsTrigger = style({
   ":focus-visible": focus,
 })
 
+export const quickSettingsTriggerVertical = style({
+  minWidth: "24px",
+  padding: "4px 3px",
+  borderRadius: "14px",
+})
+
 export const quickSettingsPopover = style({
   backgroundColor: "transparent",
   boxShadow: "none",
@@ -64,17 +70,6 @@ export const quickSettingsTitle = style({
   color: foreground,
   fontSize: "20px",
   fontWeight: "700",
-})
-
-export const quickSettingsHeaderIcon = style({
-  minWidth: "48px",
-  minHeight: "48px",
-  borderRadius: "24px",
-  backgroundColor: controlPressed,
-  color: foreground,
-  selectors: {
-    "&.active": { backgroundColor: activeBackground },
-  },
 })
 
 export const quickSettingsSubtitle = style({
@@ -168,7 +163,7 @@ export const quickSettingsSplitTile = style({
 export const quickSettingsSplitTilePrimary = style({
   minWidth: "0",
   minHeight: "48px",
-  padding: "0 10px",
+  padding: "0 12px",
   borderRadius: "24px 0 0 24px",
   backgroundColor: "transparent",
   color: foreground,
@@ -201,9 +196,12 @@ export const quickSettingsSplitTileArrow = style({
   ":focus-visible": focus,
 })
 
-export const quickSettingsTileIcon = style({ minWidth: "18px" })
+export const quickSettingsTileIcon = style({ minWidth: "20px" })
 
-export const quickSettingsTileText = style({ minWidth: "0" })
+export const quickSettingsTileText = style({
+  minWidth: "0",
+  minHeight: "32px",
+})
 
 export const quickSettingsTileLabel = style({
   color: foreground,
@@ -222,13 +220,19 @@ export const quickSettingsBackButton = style({
 })
 
 export const quickSettingsList = style({
+  padding: "6px",
+  backgroundColor: "transparent",
+  border: "none",
+})
+
+export const quickSettingsScroller = style({
   backgroundColor: "transparent",
   border: "none",
 })
 
 export const quickSettingsDetailRow = style({
-  minHeight: "40px",
-  padding: "2px 8px",
+  minHeight: "48px",
+  padding: "4px 12px",
   borderRadius: "12px",
   backgroundColor: "transparent",
   color: foreground,

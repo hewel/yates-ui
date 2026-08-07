@@ -9,8 +9,8 @@ export const bar = style({
 
 export const barVertical = style({
   backgroundColor: "#1d1d1d",
-  minWidth: "34px",
-  padding: "8px 0",
+  minWidth: "28px",
+  padding: "6px 0",
   color: "#ffffff",
 })
 
@@ -19,9 +19,9 @@ export const workspaces = style({
 })
 
 export const workspaceButton = style({
-  minWidth: "18px",
+  minWidth: "16px",
   minHeight: "18px",
-  padding: "1px 6px",
+  padding: "1px 4px",
   border: "none",
   borderRadius: "9px",
   backgroundColor: "transparent",

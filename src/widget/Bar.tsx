@@ -28,7 +28,7 @@ import {
 } from "./bar/barPresentation"
 import { BarLayoutSpec, BarOrientation, orientationPolicy } from "./bar/orientationPolicy"
 import { QuickSettings, QuickSettingsHandle, QuickSettingsPage } from "./bar/QuickSettings"
-import { quickSettingsTrigger } from "./bar/QuickSettings.css"
+import { quickSettingsTrigger, quickSettingsTriggerVertical } from "./bar/QuickSettings.css"
 import { WorkspacePopupHandle, createWorkspacePopup } from "./bar/WorkspacePopup"
 import { PopupPointerEvent, WorkspacePopupEvent } from "./bar/workspacePopupSession"
 
@@ -276,7 +276,11 @@ export function createBar(options: CreateBarOptions): BarInstance {
           <Gtk.Box $type="end" spacing={8} orientation={gtkOrientation(layout.axis)}>
             {options.services.systemIndicators && <SysTray orientation={options.orientation} />}
             <Gtk.MenuButton
-              class={quickSettingsTrigger}
+              class={
+                options.orientation === "vertical"
+                  ? `${quickSettingsTrigger} ${quickSettingsTriggerVertical}`
+                  : quickSettingsTrigger
+              }
               direction={quickSettingsDirection(layout.quickSettingsDirection)}
               alwaysShowArrow={false}
               tooltipText="Quick Settings"
