@@ -220,14 +220,24 @@ export const quickSettingsExpandedTitle = style({
   fontWeight: "700",
 })
 
-export const quickSettingsSettingsPill = style({
-  minHeight: "32px",
-  padding: "0 14px",
-  borderRadius: "16px",
-  backgroundColor: controlBackground,
+export const quickSettingsSettingsLink = style({
+  minHeight: "44px",
+  margin: "4px 8px 8px",
+  padding: "0 12px",
+  border: "none",
+  borderRadius: "12px",
+  backgroundImage: "none",
+  backgroundColor: "transparent",
+  boxShadow: "none",
   color: foreground,
-  ":hover": { backgroundColor: controlHover },
+  ":hover": { backgroundColor: "rgba(255, 255, 255, 0.07)" },
+  ":active": { backgroundColor: "rgba(255, 255, 255, 0.13)" },
   ":focus-visible": focus,
+})
+
+export const quickSettingsSettingsSeparator = style({
+  margin: "0 8px",
+  backgroundColor: "rgba(255, 255, 255, 0.08)",
 })
 
 export const quickSettingsExtension = style({

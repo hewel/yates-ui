@@ -17,6 +17,7 @@ import {
   QuickSettingsState,
   SessionAction,
 } from "../../services/quickSettingsModel"
+import { SystemSettingsLauncher } from "../../services/systemSettings"
 import { BarOrientation } from "../../settings/appSettingsModel"
 import {
   quickSettingsAction,
@@ -41,7 +42,8 @@ import {
   quickSettingsScroller,
   quickSettingsSection,
   quickSettingsSectionDimmed,
-  quickSettingsSettingsPill,
+  quickSettingsSettingsLink,
+  quickSettingsSettingsSeparator,
   quickSettingsSlider,
   quickSettingsSplitTile,
   quickSettingsSplitTileArrow,
@@ -56,19 +58,9 @@ import {
   quickSettingsTileText,
   quickSettingsTopRow,
 } from "./QuickSettings.css"
+import { QuickSettingsDetail, submenuSettingsTarget } from "./quickSettingsPolicy"
 
-export type QuickSettingsDetail =
-  | "wifi"
-  | "wired"
-  | "vpn"
-  | "mobile"
-  | "bluetooth-tether"
-  | "bluetooth"
-  | "audio"
-  | "power-profile"
-  | "background-apps"
-  | "orientation"
-  | "session-confirmation"
+export type { QuickSettingsDetail } from "./quickSettingsPolicy"
 
 /** @deprecated Kept for the test-control compatibility surface. */
 export type QuickSettingsPage = "main" | QuickSettingsDetail
@@ -181,14 +173,24 @@ function DetailRow({
   )
 }
 
-function SettingsFooter({ label, onClicked }: { label: string; onClicked: () => void }) {
+function SettingsFooter({
+  detail,
+  available,
+  onClicked,
+}: {
+  detail: QuickSettingsDetail
+  available: boolean
+  onClicked: () => void
+}) {
+  const target = submenuSettingsTarget(detail)
+
   return (
-    <Gtk.Button class={`${quickSettingsSettingsPill} flat`} onClicked={onClicked}>
-      <Gtk.Box spacing={8}>
-        <Gtk.Label label={label} xalign={0} hexpand={true} />
-        <Gtk.Image iconName="go-next-symbolic" pixelSize={14} />
-      </Gtk.Box>
-    </Gtk.Button>
+    <Gtk.Box orientation={Gtk.Orientation.VERTICAL} visible={available && target !== null}>
+      <Gtk.Separator class={quickSettingsSettingsSeparator} />
+      <Gtk.Button class={`${quickSettingsSettingsLink} flat`} onClicked={onClicked}>
+        <Gtk.Label label={target?.label ?? ""} xalign={0} hexpand={true} />
+      </Gtk.Button>
+    </Gtk.Box>
   )
 }
 
@@ -336,26 +338,11 @@ interface QuickSettingsTileDescriptor {
 
 function ExpandedDetailHeader({
   tile,
-  openSettings,
   onCollapse,
 }: {
   tile: QuickSettingsTileDescriptor
-  openSettings: () => void
   onCollapse: () => void
 }) {
-  const settingsLabel = (() => {
-    switch (tile.detail) {
-      case "wifi":
-        return "Wi-Fi Settings"
-      case "bluetooth":
-      case "bluetooth-tether":
-        return "Bluetooth Settings"
-      case "power-profile":
-        return "Power Settings"
-      default:
-        return "Network Settings"
-    }
-  })()
   return (
     <Gtk.Box class={quickSettingsExpandedHeader} spacing={10}>
       <Gtk.ToggleButton
@@ -378,11 +365,6 @@ function ExpandedDetailHeader({
         xalign={0}
         hexpand={true}
         ellipsize={Pango.EllipsizeMode.END}
-      />
-      <Gtk.Button
-        class={`${quickSettingsSettingsPill} flat`}
-        label={settingsLabel}
-        onClicked={openSettings}
       />
       <Gtk.Button
         class={`${quickSettingsAction} flat`}
@@ -440,12 +422,10 @@ function TileRows({
   tiles,
   detail,
   openDetail,
-  openSettings,
 }: {
   tiles: ReadonlyArray<QuickSettingsTileDescriptor>
   detail: Accessor<QuickSettingsDetail | null>
   openDetail: (detail: string | null) => boolean
-  openSettings: () => void
 }) {
   const rows = createComputed(() => {
     const visible = tiles.filter((tile) => tile.visible())
@@ -492,10 +472,9 @@ function TileRows({
             const selected = createComputed(() => detail() === tile.detail)
             return (
               <Gtk.Revealer
-                visible={selected}
-                revealChild={true}
-                transitionType={Gtk.RevealerTransitionType.SLIDE_DOWN}
-                transitionDuration={200}
+                revealChild={selected}
+                transitionType={Gtk.RevealerTransitionType.FADE_SLIDE_DOWN}
+                transitionDuration={220}
               >
                 <Gtk.Box orientation={Gtk.Orientation.VERTICAL} spacing={12}>
                   <Gtk.Box
@@ -503,11 +482,7 @@ function TileRows({
                     orientation={Gtk.Orientation.VERTICAL}
                     spacing={8}
                   >
-                    <ExpandedDetailHeader
-                      tile={tile}
-                      openSettings={openSettings}
-                      onCollapse={() => openDetail(null)}
-                    />
+                    <ExpandedDetailHeader tile={tile} onCollapse={() => openDetail(null)} />
                     {tile.renderDetail()}
                   </Gtk.Box>
                   {second && (
@@ -526,15 +501,16 @@ function TileRows({
           }
           return (
             <Gtk.Box orientation={Gtk.Orientation.VERTICAL} spacing={12}>
-              <Gtk.Box
-                class={quickSettingsTileRow}
-                spacing={12}
-                homogeneous={true}
-                visible={rowExpanded.as((expanded) => !expanded)}
+              <Gtk.Revealer
+                revealChild={rowExpanded.as((expanded) => !expanded)}
+                transitionType={Gtk.RevealerTransitionType.FADE_SLIDE_DOWN}
+                transitionDuration={220}
               >
-                {renderTile(first, detail, openDetail)}
-                {second ? renderTile(second, detail, openDetail) : closePlaceholder()}
-              </Gtk.Box>
+                <Gtk.Box class={quickSettingsTileRow} spacing={12} homogeneous={true}>
+                  {renderTile(first, detail, openDetail)}
+                  {second ? renderTile(second, detail, openDetail) : closePlaceholder()}
+                </Gtk.Box>
+              </Gtk.Revealer>
               {renderExpanded(first, 0)}
               {renderExpanded(second, 1)}
             </Gtk.Box>
@@ -559,6 +535,7 @@ export interface QuickSettingsHandle {
 
 export interface QuickSettingsOptions {
   readonly quickSettings: QuickSettingsModule
+  readonly systemSettings: SystemSettingsLauncher
   readonly orientation: BarOrientation
   readonly setBarOrientation: (orientation: BarOrientation) => void
   readonly openSettings: () => void
@@ -607,9 +584,11 @@ export function QuickSettings(options: QuickSettingsOptions) {
     setDetail(null)
     setSessionAction(null)
   }
-  const openSettings = () => {
+  const openSystemSettings = (detail: QuickSettingsDetail) => {
+    const target = submenuSettingsTarget(detail)
+    if (target === null || !options.systemSettings.available) return
     if (popover) closeAndReset(popover)
-    options.openSettings()
+    options.systemSettings.open(target.panel)
   }
 
   const renderWifiDetail = (): GObject.Object => (
@@ -651,7 +630,11 @@ export function QuickSettings(options: QuickSettingsOptions) {
           </For>
         </Gtk.ListBox>
       </Gtk.ScrolledWindow>
-      <SettingsFooter label="All Networks" onClicked={openSettings} />
+      <SettingsFooter
+        detail="wifi"
+        available={options.systemSettings.available}
+        onClicked={() => openSystemSettings("wifi")}
+      />
     </Gtk.Box>
   )
 
@@ -670,7 +653,6 @@ export function QuickSettings(options: QuickSettingsOptions) {
   }
   const renderConnectionDetail = (kind: ConnectionDetail): GObject.Object => {
     const connections = createComputed(() => connectionState(kind).connections.slice(0, 8))
-    const settingsLabel = kind === "bluetooth-tether" ? "Bluetooth Settings" : "Network Settings"
     const dispatchConnection = (id: string) => {
       switch (kind) {
         case "wired":
@@ -725,7 +707,11 @@ export function QuickSettings(options: QuickSettingsOptions) {
             </For>
           </Gtk.ListBox>
         </Gtk.ScrolledWindow>
-        <SettingsFooter label={settingsLabel} onClicked={openSettings} />
+        <SettingsFooter
+          detail={kind}
+          available={options.systemSettings.available}
+          onClicked={() => openSystemSettings(kind)}
+        />
       </Gtk.Box>
     )
   }
@@ -798,7 +784,11 @@ export function QuickSettings(options: QuickSettingsOptions) {
           </For>
         </Gtk.ListBox>
       </Gtk.ScrolledWindow>
-      <SettingsFooter label="Bluetooth Settings" onClicked={openSettings} />
+      <SettingsFooter
+        detail="bluetooth"
+        available={options.systemSettings.available}
+        onClicked={() => openSystemSettings("bluetooth")}
+      />
     </Gtk.Box>
   )
 
@@ -821,7 +811,6 @@ export function QuickSettings(options: QuickSettingsOptions) {
           )}
         </For>
       </Gtk.ListBox>
-      <SettingsFooter label="Power Settings" onClicked={openSettings} />
     </Gtk.Box>
   )
 
@@ -1124,8 +1113,8 @@ export function QuickSettings(options: QuickSettingsOptions) {
 
           <Gtk.Revealer
             revealChild={isDetailVisible("session-confirmation")}
-            transitionType={Gtk.RevealerTransitionType.SLIDE_DOWN}
-            transitionDuration={200}
+            transitionType={Gtk.RevealerTransitionType.FADE_SLIDE_DOWN}
+            transitionDuration={220}
           >
             <Gtk.Box
               class={quickSettingsInlineDetail}
@@ -1249,8 +1238,8 @@ export function QuickSettings(options: QuickSettingsOptions) {
 
           <Gtk.Revealer
             revealChild={isDetailVisible("audio")}
-            transitionType={Gtk.RevealerTransitionType.SLIDE_DOWN}
-            transitionDuration={200}
+            transitionType={Gtk.RevealerTransitionType.FADE_SLIDE_DOWN}
+            transitionDuration={220}
           >
             <Gtk.Box
               class={quickSettingsInlineDetail}
@@ -1278,7 +1267,11 @@ export function QuickSettings(options: QuickSettingsOptions) {
                   )}
                 </For>
               </Gtk.ListBox>
-              <SettingsFooter label="Sound Settings" onClicked={openSettings} />
+              <SettingsFooter
+                detail="audio"
+                available={options.systemSettings.available}
+                onClicked={() => openSystemSettings("audio")}
+              />
             </Gtk.Box>
           </Gtk.Revealer>
 
@@ -1319,12 +1312,7 @@ export function QuickSettings(options: QuickSettingsOptions) {
             />
           </Gtk.Box>
 
-          <TileRows
-            tiles={tiles}
-            detail={detail}
-            openDetail={openDetail}
-            openSettings={openSettings}
-          />
+          <TileRows tiles={tiles} detail={detail} openDetail={openDetail} />
 
           <Gtk.Button
             class={`${quickSettingsExtension} flat`}
@@ -1350,8 +1338,8 @@ export function QuickSettings(options: QuickSettingsOptions) {
 
           <Gtk.Revealer
             revealChild={isDetailVisible("background-apps")}
-            transitionType={Gtk.RevealerTransitionType.SLIDE_DOWN}
-            transitionDuration={200}
+            transitionType={Gtk.RevealerTransitionType.FADE_SLIDE_DOWN}
+            transitionDuration={220}
           >
             <Gtk.Box
               class={quickSettingsInlineDetail}
@@ -1376,7 +1364,11 @@ export function QuickSettings(options: QuickSettingsOptions) {
                   )}
                 </For>
               </Gtk.ListBox>
-              <SettingsFooter label="App Settings" onClicked={openSettings} />
+              <SettingsFooter
+                detail="background-apps"
+                available={options.systemSettings.available}
+                onClicked={() => openSystemSettings("background-apps")}
+              />
             </Gtk.Box>
           </Gtk.Revealer>
 
@@ -1401,8 +1393,8 @@ export function QuickSettings(options: QuickSettingsOptions) {
             />
             <Gtk.Revealer
               revealChild={isDetailVisible("orientation")}
-              transitionType={Gtk.RevealerTransitionType.SLIDE_DOWN}
-              transitionDuration={200}
+              transitionType={Gtk.RevealerTransitionType.FADE_SLIDE_DOWN}
+              transitionDuration={220}
             >
               <Gtk.Box orientation={Gtk.Orientation.HORIZONTAL} spacing={8} homogeneous={true}>
                 <Gtk.ToggleButton

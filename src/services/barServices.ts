@@ -7,6 +7,7 @@ import { createPrivacyStatusModule } from "./privacyStatus"
 import { PrivacyStatusModule } from "./privacyStatusModel"
 import { createQuickSettingsModule } from "./quickSettings"
 import { QuickSettingsModule } from "./quickSettingsModel"
+import { SystemSettingsLauncher, createSystemSettingsLauncher } from "./systemSettings"
 
 export interface BarServices {
   readonly niri: NiriStateSource
@@ -14,6 +15,7 @@ export interface BarServices {
   readonly systemIndicators: boolean
   readonly quickSettings: QuickSettingsModule
   readonly privacyStatus: PrivacyStatusModule
+  readonly systemSettings: SystemSettingsLauncher
   stop(): void
 }
 
@@ -33,6 +35,7 @@ export function createBarServices(): BarServices {
     fixtureProfile: GLib.getenv("YATES_FIXTURE_PROFILE") ?? "laptop",
     niri,
   })
+  const systemSettings = createSystemSettingsLauncher()
 
   return {
     niri,
@@ -40,6 +43,7 @@ export function createBarServices(): BarServices {
     systemIndicators: !fixtureMode,
     quickSettings,
     privacyStatus,
+    systemSettings,
     stop: () => {
       if (timer !== 0) GLib.source_remove(timer)
       privacyStatus.stop()

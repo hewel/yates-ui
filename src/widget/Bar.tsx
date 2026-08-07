@@ -460,6 +460,7 @@ export function createBar(options: CreateBarOptions): BarInstance {
               />
               <QuickSettings
                 quickSettings={options.services.quickSettings}
+                systemSettings={options.services.systemSettings}
                 orientation={options.orientation}
                 setBarOrientation={options.setBarOrientation}
                 openSettings={options.openSettings}
